@@ -1,0 +1,27 @@
+{% extends 'base.html' %}
+{% block title %}پیام‌های کانال تلگرام{% endblock %}
+{% block topbar %}پیام‌های کانال تلگرام{% endblock %}
+{% block content %}
+<h3 class="mb-4">پیام‌های کانال تلگرام</h3>
+<table class="table table-striped table-bordered align-middle text-center">
+    <thead class="table-light">
+        <tr>
+            <th>آیدی پیام</th>
+            <th>متن پیام</th>
+            <th>زمان پیام</th>
+        </tr>
+    </thead>
+    <tbody>
+    {% for msg in telegram_list %}
+        <tr>
+            <td>{{ msg.message_id }}</td>
+            <td style="max-width:400px;word-break:break-word;">{{ msg.text }}</td>
+            <td>{{ msg.date.strftime('%Y-%m-%d %H:%M') }}</td>
+        </tr>
+    {% endfor %}
+    </tbody>
+</table>
+{% if not telegram_list %}
+    <div class="alert alert-warning">هیچ پیامی یافت نشد.</div>
+{% endif %}
+{% endblock %} 
