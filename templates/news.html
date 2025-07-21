@@ -2,28 +2,233 @@
 {% block title %}اخبار مهم خبرگزاری‌ها{% endblock %}
 {% block topbar %}اخبار مهم خبرگزاری‌ها{% endblock %}
 {% block content %}
-<h3 class="mb-4">اخبار مهم خبرگزاری‌ها</h3>
-<table class="table table-striped table-bordered align-middle text-center">
-    <thead class="table-light">
-        <tr>
-            <th>عنوان خبر</th>
-            <th>خبرگزاری</th>
-            <th>زمان انتشار</th>
-            <th>لینک</th>
-        </tr>
-    </thead>
-    <tbody>
-    {% for news in news_list %}
-        <tr>
-            <td>{{ news.title }}</td>
-            <td>{{ news.agency }}</td>
-            <td>{{ news.published_at.strftime('%Y-%m-%d %H:%M') }}</td>
-            <td><a href="{{ news.url }}" target="_blank" class="btn btn-sm btn-info">مشاهده</a></td>
-        </tr>
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h3>اخبار مهم خبرگزاری‌ها</h3>
+    <div>
+        <button onclick="fetchLatestNews()" class="btn btn-warning btn-sm">
+            <i class="fas fa-sync-alt"></i> دریافت اخبار جدید
+        </button>
+    </div>
+</div>
+
+<div class="card mb-4 p-3 shadow-sm">
+  <form class="row g-3 align-items-end" id="newsFilterForm" onsubmit="event.preventDefault(); applyAdvancedNewsFilter();">
+    <div class="col-md-2">
+      <label for="agencyFilter" class="form-label">فیلتر خبرگزاری:</label>
+      <select id="agencyFilter" class="form-select">
+        <option value="all">همه</option>
+        <option value="internal">خبرگزاری‌های داخلی</option>
+        <option value="external">خبرگزاری‌های خارجی</option>
+      </select>
+    </div>
+    <div class="col-md-2">
+      <label for="dateFrom" class="form-label">از تاریخ (شمسی):</label>
+      <input type="text" id="dateFrom" class="form-control" placeholder="مثال: 1403-04-01">
+    </div>
+    <div class="col-md-2">
+      <label for="dateTo" class="form-label">تا تاریخ (شمسی):</label>
+      <input type="text" id="dateTo" class="form-control" placeholder="مثال: 1403-04-31">
+    </div>
+    <div class="col-md-3">
+      <label for="rangeFilter" class="form-label">بازه آماده:</label>
+      <select id="rangeFilter" class="form-select">
+        <option value="">انتخاب کنید...</option>
+        <option value="today">امروز</option>
+        <option value="10days">۱۰ روز قبل</option>
+        <option value="week">این هفته</option>
+        <option value="month">این ماه</option>
+        <option value="year">امسال</option>
+      </select>
+    </div>
+    <div class="col-md-2 d-flex align-items-end">
+      <button type="submit" class="btn btn-primary w-100"><i class="fas fa-search"></i> جستجو</button>
+    </div>
+  </form>
+</div>
+
+<div id="loading" style="display: none;" class="text-center mb-3">
+    <div class="spinner-border text-primary" role="status">
+        <span class="visually-hidden">در حال دریافت اخبار...</span>
+    </div>
+    <p class="mt-2">در حال دریافت اخبار جدید...</p>
+</div>
+
+{% if grouped_news %}
+    {% for day, news_list in grouped_news.items() %}
+        <div class="card mb-4">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span><b>تاریخ:</b> {{ day|replace('-', '/') }}</span>
+                <div>
+                    <!-- <a href="/download-news-pdf?day={{ day }}" class="btn btn-success btn-sm">دانلود PDF</a> -->
+                    <button onclick="printDayNews('{{ day }}', '{{ day|replace('-', '/') }}')" class="btn btn-primary btn-sm">چاپ PDF</button>
+                </div>
+            </div>
+            <div class="card-body p-0">
+                <table class="table table-striped table-bordered align-middle text-center mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>عنوان خبر</th>
+                            <th>خبرگزاری</th>
+                            <th>زمان انتشار</th>
+                            <th>لینک</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    {% for news in news_list %}
+                        <tr id="news-row-{{ news.id }}">
+                            <td>{{ news.title }}</td>
+                            <td>{{ news.agency }}</td>
+                            <td>{{ jalali_date(news.published_at) }}</td>
+                            <td class="d-flex justify-content-center">
+                                <a href="{{ news.url }}" target="_blank" class="btn btn-sm btn-info" title="مشاهده خبر" style="padding: 2px 6px;">
+                                    <!-- آیکون چشم SVG -->
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="currentColor" viewBox="0 0 16 16" style="vertical-align: middle;">
+                                      <path d="M16 8s-3-5.5-8-5.5S0 8 0 8s3 5.5 8 5.5S16 8 16 8zm-8 4a4 4 0 1 1 0-8 4 4 0 0 1 0 8zm0-1.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5z"/>
+                                    </svg>
+                                </a>
+                                <button class="btn btn-sm btn-danger ms-2" onclick="deleteNews({{ news.id }})" title="حذف خبر" style="padding: 2px 6px;">
+                                    <!-- آیکون سطل زباله SVG -->
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="currentColor" viewBox="0 0 16 16" style="vertical-align: middle;">
+                                      <path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm2.5.5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0V6zm2 .5a.5.5 0 0 1 .5-.5.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6z"/>
+                                      <path fill-rule="evenodd" d="M14.5 3a1 1 0 0 1-1 1H13v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-.5a1 1 0 0 1 0-2h3a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1h3a1 1 0 0 1 1 1zM4.118 4 4 4.059V13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4.059L11.882 4H4.118zM2.5 3a.5.5 0 0 0-.5.5V4h12v-.5a.5.5 0 0 0-.5-.5h-11z"/>
+                                    </svg>
+                                </button>
+                            </td>
+                        </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
     {% endfor %}
-    </tbody>
-</table>
-{% if not news_list %}
+{% else %}
     <div class="alert alert-warning">هیچ خبری یافت نشد.</div>
 {% endif %}
-{% endblock %} 
+
+<script>
+function fetchLatestNews() {
+    const loadingDiv = document.getElementById('loading');
+    loadingDiv.style.display = 'block';
+    
+    fetch('/fetch-news')
+        .then(response => response.json())
+        .then(data => {
+            loadingDiv.style.display = 'none';
+            if (data.message) {
+                alert('اخبار جدید با موفقیت دریافت شد!');
+                location.reload(); // بروزرسانی صفحه
+            } else {
+                alert('خطا: ' + data.error);
+            }
+        })
+        .catch(error => {
+            loadingDiv.style.display = 'none';
+            alert('خطا در دریافت اخبار: ' + error);
+        });
+}
+
+function printDayNews(day, dayDisplay) {
+    // باز کردن صفحه جدید برای چاپ
+    const printWindow = window.open('', '_blank');
+    printWindow.document.write(`
+        <!DOCTYPE html>
+        <html dir="rtl" lang="fa">
+        <head>
+            <meta charset="UTF-8">
+            <title>اخبار روز ${dayDisplay}</title>
+            <style>
+                @import url('https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;700&display=swap');
+                body {
+                    font-family: 'Vazirmatn', Arial, sans-serif;
+                    direction: rtl;
+                    text-align: right;
+                    margin: 20px;
+                    font-size: 14px;
+                }
+                h1 {
+                    text-align: center;
+                    color: #333;
+                    border-bottom: 2px solid #007bff;
+                    padding-bottom: 10px;
+                }
+                table {
+                    width: 100%;
+                    border-collapse: collapse;
+                    margin-top: 20px;
+                }
+                th, td {
+                    border: 1px solid #ddd;
+                    padding: 8px;
+                    text-align: right;
+                }
+                th {
+                    background-color: #007bff;
+                    color: white;
+                    font-weight: bold;
+                }
+                tr:nth-child(even) {
+                    background-color: #f2f2f2;
+                }
+                @media print {
+                    body { margin: 0; }
+                    .no-print { display: none; }
+                }
+            </style>
+        </head>
+        <body>
+            <h1>اخبار روز ${dayDisplay}</h1>
+            <div class="no-print">
+                <button onclick="window.print()" style="margin: 10px; padding: 10px 20px; background: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer;">
+                    چاپ PDF
+                </button>
+            </div>
+            <div id="news-content">
+                در حال بارگذاری...
+            </div>
+        </body>
+        </html>
+    `);
+    
+    // دریافت اخبار از API
+    fetch(`/api/news-by-day?day=${day}`)
+        .then(response => response.json())
+        .then(data => {
+            let html = '<table><thead><tr><th>عنوان خبر</th><th>خبرگزاری</th><th>زمان انتشار</th><th>لینک</th></tr></thead><tbody>';
+            data.news.forEach(news => {
+                html += `<tr><td>${news.title}</td><td>${news.agency}</td><td>${news.published_at}</td><td><a href="${news.url}" target="_blank">مشاهده</a></td></tr>`;
+            });
+            html += '</tbody></table>';
+            printWindow.document.getElementById('news-content').innerHTML = html;
+        })
+        .catch(error => {
+            printWindow.document.getElementById('news-content').innerHTML = 'خطا در بارگذاری اخبار';
+        });
+}
+
+function applyAdvancedNewsFilter() {
+    const agency = document.getElementById('agencyFilter').value;
+    const dateFrom = document.getElementById('dateFrom').value;
+    const dateTo = document.getElementById('dateTo').value;
+    const range = document.getElementById('rangeFilter').value;
+    let url = `/news?agency=${agency}`;
+    if (dateFrom) url += `&date_from=${dateFrom}`;
+    if (dateTo) url += `&date_to=${dateTo}`;
+    if (range) url += `&range=${range}`;
+    window.location.href = url;
+}
+
+function deleteNews(newsId) {
+    if (!confirm('آیا از حذف این خبر مطمئن هستید؟')) return;
+    fetch(`/delete-news/${newsId}`, {method: 'POST'})
+        .then(res => res.json())
+        .then(data => {
+            if (data.message) {
+                document.getElementById(`news-row-${newsId}`).remove();
+            } else {
+                alert('خطا در حذف خبر: ' + (data.detail || data.error));
+            }
+        })
+        .catch(err => alert('خطا در حذف خبر: ' + err));
+}
+</script>
+{% endblock %}

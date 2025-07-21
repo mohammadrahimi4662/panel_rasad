@@ -1,0 +1,129 @@
+{% extends 'base.html' %}
+{% block title %}پیام‌های روزانه{% endblock %}
+{% block topbar %}پیام‌های روزانه{% endblock %}
+{% block content %}
+<div class="row">
+    <div class="col-md-8">
+        <h3 class="mb-4">گزارش روزانه - {{ report.date }}</h3>
+        
+        {% if report.messages %}
+            {% for message in report.messages %}
+            <div class="card mb-3">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">{{ message.title }}</h5>
+                    <div>
+                        <span class="badge bg-primary">{{ message.category }}</span>
+                        <span class="badge bg-warning">اولویت: {{ "⭐" * message.priority }}</span>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <p class="card-text">{{ message.content }}</p>
+                    <small class="text-muted">ایجاد شده: {{ jalali_date(message.created_at) }}</small>
+                </div>
+            </div>
+            {% endfor %}
+        {% else %}
+            <div class="alert alert-info">
+                <h5>هیچ پیامی برای امروز ثبت نشده است.</h5>
+                <p>برای اضافه کردن پیام جدید، از فرم زیر استفاده کنید.</p>
+            </div>
+        {% endif %}
+    </div>
+    
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">
+                <h5>افزودن پیام جدید</h5>
+            </div>
+            <div class="card-body">
+                <form id="messageForm">
+                    <div class="mb-3">
+                        <label for="title" class="form-label">عنوان</label>
+                        <input type="text" class="form-control" id="title" name="title" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="content" class="form-label">محتوا</label>
+                        <textarea class="form-control" id="content" name="content" rows="4" required></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label for="category" class="form-label">دسته‌بندی</label>
+                        <select class="form-control" id="category" name="category">
+                            <option value="عمومی">عمومی</option>
+                            <option value="سیاسی">سیاسی</option>
+                            <option value="اقتصادی">اقتصادی</option>
+                            <option value="ورزشی">ورزشی</option>
+                            <option value="فرهنگی">فرهنگی</option>
+                            <option value="اجتماعی">اجتماعی</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="priority" class="form-label">اولویت</label>
+                        <select class="form-control" id="priority" name="priority">
+                            <option value="1">کم (1)</option>
+                            <option value="2">متوسط (2)</option>
+                            <option value="3">زیاد (3)</option>
+                            <option value="4">خیلی زیاد (4)</option>
+                            <option value="5">بحرانی (5)</option>
+                        </select>
+                    </div>
+                    <button type="submit" class="btn btn-primary">افزودن پیام</button>
+                </form>
+            </div>
+        </div>
+        
+        <div class="card mt-3">
+            <div class="card-header">
+                <h5>عملیات</h5>
+            </div>
+            <div class="card-body">
+                <a href="/download-daily-pdf" class="btn btn-success btn-sm">
+                    <i class="fas fa-download"></i> دانلود PDF
+                </a>
+                <button class="btn btn-info btn-sm" onclick="refreshPage()">
+                    <i class="fas fa-refresh"></i> بروزرسانی
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.getElementById('messageForm').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    
+    const formData = new FormData(this);
+    const data = {
+        title: formData.get('title'),
+        content: formData.get('content'),
+        category: formData.get('category'),
+        priority: parseInt(formData.get('priority'))
+    };
+    
+    try {
+        const response = await fetch('/api/daily-message', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(data)
+        });
+        
+        const result = await response.json();
+        
+        if (result.message) {
+            alert('پیام با موفقیت اضافه شد!');
+            this.reset();
+            location.reload();
+        } else {
+            alert('خطا: ' + result.error);
+        }
+    } catch (error) {
+        alert('خطا در ارسال درخواست: ' + error);
+    }
+});
+
+function refreshPage() {
+    location.reload();
+}
+</script>
+{% endblock %} 

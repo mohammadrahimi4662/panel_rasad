@@ -27,5 +27,16 @@ class TelegramMessage(Base):
     text = Column(Text)  # متن پیام
     date = Column(DateTime, default=datetime.datetime.utcnow)  # زمان پیام
 
+# جدول پیام‌های روزانه
+class DailyMessage(Base):
+    __tablename__ = "daily_messages"
+    id = Column(Integer, primary_key=True, index=True)
+    title = Column(String, index=True)  # عنوان پیام
+    content = Column(Text)  # محتوای پیام
+    category = Column(String, index=True)  # دسته‌بندی (مثل: سیاسی، اقتصادی، ورزشی)
+    priority = Column(Integer, default=1)  # اولویت (1=کم، 5=زیاد)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)  # زمان ایجاد
+    updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)  # زمان بروزرسانی
+
 # ایجاد جداول
 Base.metadata.create_all(bind=engine) 

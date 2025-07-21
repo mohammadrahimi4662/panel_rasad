@@ -16,7 +16,7 @@
         <tr>
             <td>{{ msg.message_id }}</td>
             <td style="max-width:400px;word-break:break-word;">{{ msg.text }}</td>
-            <td>{{ msg.date.strftime('%Y-%m-%d %H:%M') }}</td>
+            <td>{{ jalali_date(msg.date) }}</td>
         </tr>
     {% endfor %}
     </tbody>
