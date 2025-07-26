@@ -2,15 +2,13 @@ import requests
 from bs4 import BeautifulSoup
 from database import SessionLocal, News
 import datetime
-import feedparser
 from dateutil import parser as date_parser
+from urllib.parse import urlparse, urlunparse
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-import time
-from urllib.parse import urlparse, urlunparse
 
 # تابع دریافت اخبار مهم از IRNA
 def fetch_irna_top_news():
@@ -26,11 +24,12 @@ def fetch_irna_top_news():
         print(link)
         if not link.startswith('http'):
             link = 'https://www.irna.ir' + link
+        today = datetime.datetime.utcnow()
         news_list.append({
             'title': title,
             'url': link,
             'agency': 'IRNA',
-            'published_at': datetime.datetime.utcnow(),
+            'published_at': today,
             'summary': ''
         })
     return news_list
@@ -65,11 +64,12 @@ def fetch_isna_top_news():
                 link = 'https://www.isna.ir' + link
             summary_tag = li.select_one('div.desc p')
             summary = summary_tag.get_text(strip=True) if summary_tag else ''
+            today = datetime.datetime.utcnow()
             news_list.append({
                 'title': title,
                 'url': link,
                 'agency': 'ISNA',
-                'published_at': datetime.datetime.utcnow(),
+                'published_at': today,
                 'summary': summary
             })
         if len(news_list) >= 10:
@@ -79,54 +79,136 @@ def fetch_isna_top_news():
 
 def fetch_bbc_persian_news():
     """
-    دریافت اخبار از BBC فارسی (https://www.bbc.com/persian/topics/ckdxnwvwwjnt) با Selenium و اسکرول خودکار
-    خروجی: لیست دیکشنری با کلیدهای title, url, agency, published_at, summary
+    دریافت اخبار از BBC فارسی
     """
-    url = 'https://www.bbc.com/persian/topics/ckdxnwvwwjnt'
-    options = Options()
-    options.add_argument('--headless')
-    options.add_argument('--disable-gpu')
-    driver = webdriver.Chrome(options=options)
-    driver.get(url)
-    time.sleep(3)
+    try:
+        url = 'https://www.bbc.com/persian/topics/ckdxnwvwwjnt'
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+        }
+        response = requests.get(url, timeout=10, headers=headers)
+        response.encoding = 'utf-8'
+        soup = BeautifulSoup(response.text, 'html.parser')
+        news_list = []
+        
+        # جستجوی اخبار در بخش‌های مختلف
+        selectors = [
+            'ul[data-testid="topic-promos"] > li h2 a',
+            'article h2 a',
+            'div[data-testid="card-headline"] a'
+        ]
+        
+        for selector in selectors:
+            for a_tag in soup.select(selector):
+                title = a_tag.get_text(strip=True)
+                if not title:
+                    continue
+                    
+                link = a_tag['href']
+                if not link.startswith('http'):
+                    link = 'https://www.bbc.com' + link
+                
+                # پیدا کردن زمان انتشار
+                parent = a_tag.find_parent('li') or a_tag.find_parent('article')
+                time_tag = None
+                if parent:
+                    time_tag = parent.select_one('time')
+                
+                today = datetime.datetime.utcnow()
+                published_at = today
+                if time_tag and time_tag.has_attr('datetime'):
+                    try:
+                        dt = date_parser.parse(time_tag['datetime'])
+                        published_at = dt
+                    except Exception:
+                        pass
+                
+                news_list.append({
+                    'title': title,
+                    'url': link,
+                    'agency': 'BBC',
+                    'published_at': published_at,
+                    'summary': ''
+                })
+                
+                if len(news_list) >= 10:
+                    break
+            if len(news_list) >= 10:
+                break
+        
+        print(f"BBC news count: {len(news_list)}")
+        return news_list
+    except Exception as e:
+        print(f"خطا در دریافت اخبار BBC: {e}")
+        return []
 
-    # اسکرول خودکار تا انتهای صفحه برای لود شدن همه خبرها
-    last_height = driver.execute_script("return document.body.scrollHeight")
-    for _ in range(15):  # تعداد دفعات اسکرول را می‌توانی بیشتر یا کمتر کنی
-        driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
-        time.sleep(2)
-        new_height = driver.execute_script("return document.body.scrollHeight")
-        if new_height == last_height:
-            break
-        last_height = new_height
+def fetch_iranintl_news():
+    """
+    دریافت اخبار ایران اینترنشنال
+    """
+    try:
+        url = 'https://www.iranintl.com/iran'
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+        }
+        response = requests.get(url, timeout=10, headers=headers)
+        response.encoding = 'utf-8'
+        soup = BeautifulSoup(response.text, 'html.parser')
+        news_list = []
+        today = datetime.datetime.utcnow()
 
-    soup = BeautifulSoup(driver.page_source, 'html.parser')
-    news_list = []
-    for li in soup.select('ul[data-testid="topic-promos"] > li'):
-        a_tag = li.select_one('h2 a')
-        if not a_tag:
-            continue
-        title = a_tag.get_text(strip=True)
-        link = a_tag['href']
-        if not link.startswith('http'):
-            link = 'https://www.bbc.com' + link
-        summary = ''
-        time_tag = li.select_one('time')
-        published_at = datetime.datetime.utcnow()
-        if time_tag and time_tag.has_attr('datetime'):
-            try:
-                published_at = date_parser.parse(time_tag['datetime'])
-            except Exception:
-                pass
-        news_list.append({
-            'title': title,
-            'url': link,
-            'agency': 'BBC',
-            'published_at': published_at,
-            'summary': summary
-        })
-    driver.quit()
-    return news_list
+        # جستجوی اخبار در بخش‌های مختلف
+        selectors = [
+            'article h3',
+            'div.TopicCluster-module-scss-module__RZ03fG__featured article h3',
+            'div.TopicCluster-module-scss-module__RZ03fG__additionalItem article h3',
+            'div.topic__grid__item article h3'
+        ]
+        
+        for selector in selectors:
+            for title_tag in soup.select(selector):
+                if not title_tag:
+                    continue
+                    
+                title = title_tag.get_text(strip=True)
+                if not title:
+                    continue
+                
+                # پیدا کردن لینک
+                article = title_tag.find_parent('article')
+                if not article:
+                    continue
+                    
+                link_tag = article.select_one('a')
+                if not link_tag:
+                    continue
+                    
+                link = link_tag['href']
+                if not link.startswith('http'):
+                    link = 'https://www.iranintl.com' + link
+                
+                # پیدا کردن خلاصه
+                summary_tag = article.select_one('p')
+                summary = summary_tag.get_text(strip=True) if summary_tag else ''
+                
+                news_list.append({
+                    'title': title,
+                    'url': link,
+                    'agency': 'IranIntl',
+                    'published_at': today,
+                    'summary': summary
+                })
+                
+                if len(news_list) >= 10:
+                    break
+            if len(news_list) >= 10:
+                break
+        
+        print(f"IranIntl news count: {len(news_list)}")
+        return news_list
+    except Exception as e:
+        print(f"خطا در دریافت اخبار IranIntl: {e}")
+        return []
 
 def normalize_text(text):
     return text.strip().lower()
@@ -152,8 +234,8 @@ def save_news(news_items):
         ).first()
         if not exists:
             news = News(
-                title=norm_title,
-                url=norm_url,
+                title=item['title'],  # ذخیره متن اصلی
+                url=item['url'],      # ذخیره URL اصلی
                 agency=item['agency'],
                 published_at=item['published_at'],
                 summary=item['summary']
@@ -165,5 +247,11 @@ def save_news(news_items):
 if __name__ == "__main__":
     # irna_news = fetch_irna_top_news()
     isna_news = fetch_isna_top_news()
+    bbc_news = fetch_bbc_persian_news()
+    iranintl_news = fetch_iranintl_news()
     save_news(isna_news)
+    save_news(bbc_news)
+    save_news(iranintl_news)
     print("اخبار با موفقیت ذخیره شد.") 
+    total_count = len(isna_news) + len(bbc_news) + len(iranintl_news)
+    print(f"تعداد کل اخبار: {total_count}") 

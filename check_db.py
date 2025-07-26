@@ -10,9 +10,12 @@ def show_all_news():
     for news in news_list:
         print(f"عنوان: {news.title}")
         print(f"خبرگزاری: {news.agency}")
-        print(f"تاریخ: {news.published_at}")
+        print(f"تاریخ: {news.published_at.date()}")
         print(f"لینک: {news.url}")
-        print(f"خلاصه: {news.summary}")
+        if news.summary:
+            print(f"خلاصه: {news.summary}")
+        else:
+            print("خلاصه: -")
         print('-'*40)
     db.close()
 

@@ -17,7 +17,7 @@
         <tr>
             <td>{{ news.title }}</td>
             <td>{{ news.agency }}</td>
-            <td>{{ news.published_at.strftime('%Y-%m-%d %H:%M') }}</td>
+            <td>{{ jalali_date(news.published_at) }}</td>
             <td><a href="{{ news.url }}" target="_blank" class="btn btn-sm btn-info">مشاهده</a></td>
         </tr>
     {% endfor %}

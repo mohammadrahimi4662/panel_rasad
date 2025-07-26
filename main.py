@@ -5,7 +5,7 @@ from fastapi.staticfiles import StaticFiles
 import uvicorn
 from database import SessionLocal, News, TelegramMessage
 from datetime import datetime
-from news_fetcher import fetch_isna_top_news, save_news, fetch_bbc_persian_news
+from news_fetcher import fetch_isna_top_news, save_news, fetch_bbc_persian_news, fetch_iranintl_news
 from dateutil import parser as date_parser
 import jdatetime
 from fastapi.responses import FileResponse, StreamingResponse
@@ -21,10 +21,9 @@ app.mount('/static', StaticFiles(directory='static'), name='static')
 templates = Jinja2Templates(directory='templates')
 
 def convert_to_jalali(date_obj):
-    """تبدیل تاریخ میلادی به شمسی"""
+    """تبدیل تاریخ میلادی به شمسی (فقط تاریخ)"""
     if date_obj:
         jalali_date = jdatetime.datetime.fromgregorian(datetime=date_obj)
-        # نام ماه‌های شمسی
         month_names = {
             1: 'فروردین', 2: 'اردیبهشت', 3: 'خرداد',
             4: 'تیر', 5: 'مرداد', 6: 'شهریور',
@@ -32,7 +31,7 @@ def convert_to_jalali(date_obj):
             10: 'دی', 11: 'بهمن', 12: 'اسفند'
         }
         month_name = month_names.get(jalali_date.month, '')
-        return f"{jalali_date.day} {month_name} {jalali_date.year} - {jalali_date.strftime('%H:%M')}"
+        return f"{jalali_date.day} {month_name} {jalali_date.year}"
     return ""
 
 # اضافه کردن تابع تبدیل به context templates
@@ -134,9 +133,11 @@ def fetch_news_endpoint():
     try:
         isna_news = fetch_isna_top_news()
         bbc_news = fetch_bbc_persian_news()
+        iranintl_news = fetch_iranintl_news()
         save_news(isna_news)
         save_news(bbc_news)
-        total_count = len(isna_news) + len(bbc_news)
+        save_news(iranintl_news)
+        total_count = len(isna_news) + len(bbc_news) + len(iranintl_news)
         return {"message": "اخبار با موفقیت دریافت و ذخیره شد", "count": total_count}
     except Exception as e:
         return {"error": f"خطا در دریافت اخبار: {str(e)}"}
