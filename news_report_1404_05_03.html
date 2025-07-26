@@ -1,0 +1,296 @@
+
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <title>گزارش اخبار روزانه - 3 مرداد 1404</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Vazirmatn:wght@300;400;500;600;700&display=swap');
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Vazirmatn', Tahoma, Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background: #f8f9fa;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        
+        .header h1 {
+            font-size: 28px;
+            font-weight: 700;
+            margin-bottom: 10px;
+        }
+        
+        .header .date {
+            font-size: 18px;
+            opacity: 0.9;
+        }
+        
+        .summary-section {
+            background: #e3f2fd;
+            padding: 25px;
+            margin: 20px;
+            border-radius: 8px;
+            border-right: 5px solid #2196f3;
+        }
+        
+        .summary-title {
+            font-size: 20px;
+            font-weight: 600;
+            color: #1976d2;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+        }
+        
+        .summary-content {
+            font-size: 14px;
+            line-height: 1.8;
+            white-space: pre-line;
+        }
+        
+        .agency-section {
+            margin: 20px;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        
+        .agency-header {
+            background: #4caf50;
+            color: white;
+            padding: 15px 20px;
+            font-size: 18px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+        }
+        
+        .news-list {
+            padding: 0;
+        }
+        
+        .news-item {
+            padding: 15px 20px;
+            border-bottom: 1px solid #f0f0f0;
+            transition: background-color 0.2s;
+        }
+        
+        .news-item:hover {
+            background-color: #f8f9fa;
+        }
+        
+        .news-item:last-child {
+            border-bottom: none;
+        }
+        
+        .news-title {
+            font-size: 16px;
+            font-weight: 500;
+            color: #2c3e50;
+            margin-bottom: 8px;
+            line-height: 1.5;
+        }
+        
+        .news-meta {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 12px;
+            color: #666;
+            margin-top: 8px;
+        }
+        
+        .news-time {
+            background: #f1f3f4;
+            padding: 4px 8px;
+            border-radius: 4px;
+        }
+        
+        .news-link {
+            color: #2196f3;
+            text-decoration: none;
+            font-weight: 500;
+        }
+        
+        .news-link:hover {
+            text-decoration: underline;
+        }
+        
+        .news-summary {
+            font-size: 13px;
+            color: #555;
+            margin-top: 8px;
+            padding: 8px;
+            background: #f8f9fa;
+            border-radius: 4px;
+            border-right: 3px solid #e0e0e0;
+        }
+        
+        .stats-section {
+            background: #f5f5f5;
+            padding: 20px;
+            margin: 20px;
+            border-radius: 8px;
+        }
+        
+        .stats-title {
+            font-size: 20px;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 15px;
+            text-align: center;
+        }
+        
+        .stats-table {
+            width: 100%;
+            border-collapse: collapse;
+            background: white;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+        
+        .stats-table th {
+            background: #2196f3;
+            color: white;
+            padding: 12px;
+            text-align: center;
+            font-weight: 600;
+        }
+        
+        .stats-table td {
+            padding: 12px;
+            text-align: center;
+            border-bottom: 1px solid #e0e0e0;
+        }
+        
+        .stats-table tr:last-child td {
+            border-bottom: none;
+        }
+        
+        .footer {
+            background: #333;
+            color: white;
+            text-align: center;
+            padding: 20px;
+            font-size: 14px;
+        }
+        
+        @media print {
+            body {
+                background: white;
+                padding: 0;
+            }
+            
+            .container {
+                box-shadow: none;
+                border-radius: 0;
+            }
+            
+            .news-item:hover {
+                background-color: white;
+            }
+            
+            .news-link {
+                color: #333;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📰 گزارش اخبار روزانه</h1>
+            <div class="date">تاریخ: 3 مرداد 1404</div>
+        </div>
+
+        <div class="summary-section">
+            <div class="summary-title">📋 خلاصه کلی اخبار</div>
+            <div class="summary-content">📰 BBC: 2 خبر
+  • ایران میگوید برای ادامه مذاکره با اروپا توافق شد؛ بقایی با تمدید مکانیسم ماشه مخ...
+  • بحران تامین آب تهران؛ تلاش برای انتقال سریع آب از طالقان به پایتخت</div>
+        </div>
+
+        <div class="agency-section">
+            <div class="agency-header">📰 BBC</div>
+            <div class="news-list">
+
+                <div class="news-item">
+                    <div class="news-title">1. ایران می‌گوید برای ادامه مذاکره با اروپا توافق شد؛ بقایی: با تمدید مکانیسم ماشه مخالفیم</div>
+                    
+                    <div class="news-meta">
+                        <span class="news-time">⏰ 1404/05/03</span>
+                        <a href="https://www.bbc.com/persian/articles/c15w5xv5qxyo" target="_blank" class="news-link">🔗 مشاهده خبر</a>
+                    </div>
+                </div>
+
+                <div class="news-item">
+                    <div class="news-title">2. بحران تامین آب تهران؛ «تلاش» برای انتقال «سریع» آب از طالقان به پایتخت</div>
+                    
+                    <div class="news-meta">
+                        <span class="news-time">⏰ 1404/05/03</span>
+                        <a href="https://www.bbc.com/persian/articles/c4g2g81nx5vo" target="_blank" class="news-link">🔗 مشاهده خبر</a>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+        <div class="stats-section">
+            <div class="stats-title">📊 آمار نهایی</div>
+            <table class="stats-table">
+                <thead>
+                    <tr>
+                        <th>خبرگزاری</th>
+                        <th>تعداد اخبار</th>
+                    </tr>
+                </thead>
+                <tbody>
+
+                    <tr>
+                        <td>BBC</td>
+                        <td>2</td>
+                    </tr>
+
+                </tbody>
+            </table>
+        </div>
+
+        <div class="footer">
+            تولید شده در: 2025/07/26 11:02
+        </div>
+    </div>
+    
+    <script>
+        // چاپ خودکار پس از لود صفحه
+        window.onload = function() {
+            // setTimeout(() => {
+            //     window.print();
+            // }, 1000);
+        };
+    </script>
+</body>
+</html>

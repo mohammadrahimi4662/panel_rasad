@@ -14,6 +14,8 @@ from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, Tabl
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib import colors
 import io
+from news_pdf_generator import generate_beautiful_news_pdf
+from beautiful_news_html import generate_beautiful_news_html
 
 app = FastAPI()
 
@@ -213,6 +215,65 @@ def download_news_pdf(day: str):
     except Exception as e:
         logging.exception("خطا در تولید PDF برای روز %s", day)
         return HTMLResponse(f"خطا در تولید PDF: {e}", status_code=500)
+
+@app.get('/download-beautiful-news-pdf')
+def download_beautiful_news_pdf(day: str):
+    """دانلود PDF زیبا از اخبار یک روز خاص با خلاصه"""
+    try:
+        # تولید PDF زیبا
+        output_path = generate_beautiful_news_pdf(day)
+        
+        # ارسال فایل
+        return FileResponse(
+            path=output_path,
+            media_type='application/pdf',
+            filename=f'beautiful_news_{day}.pdf'
+        )
+    except Exception as e:
+        return HTMLResponse(f"خطا در تولید PDF زیبا: {e}", status_code=500)
+
+@app.get('/download-beautiful-news-pdf-today')
+def download_beautiful_news_pdf_today():
+    """دانلود PDF زیبا از اخبار امروز"""
+    try:
+        today = jdatetime.datetime.now()
+        day_str = f"{today.year}-{today.month:02d}-{today.day:02d}"
+        
+        # تولید PDF زیبا
+        output_path = generate_beautiful_news_pdf(day_str)
+        
+        # ارسال فایل
+        return FileResponse(
+            path=output_path,
+            media_type='application/pdf',
+            filename=f'beautiful_news_today.pdf'
+        )
+    except Exception as e:
+        return HTMLResponse(f"خطا در تولید PDF زیبا: {e}", status_code=500)
+
+@app.get('/beautiful-news-html')
+def beautiful_news_html(day: str = None):
+    """نمایش HTML زیبا از اخبار برای چاپ"""
+    try:
+        if day is None:
+            today = jdatetime.datetime.now()
+            day = f"{today.year}-{today.month:02d}-{today.day:02d}"
+        
+        # تولید HTML زیبا
+        output_path = generate_beautiful_news_html(day)
+        
+        # خواندن محتوای HTML
+        with open(output_path, 'r', encoding='utf-8') as f:
+            html_content = f.read()
+        
+        return HTMLResponse(html_content)
+    except Exception as e:
+        return HTMLResponse(f"خطا در تولید HTML زیبا: {e}", status_code=500)
+
+@app.get('/beautiful-news-html-today')
+def beautiful_news_html_today():
+    """نمایش HTML زیبا از اخبار امروز"""
+    return beautiful_news_html()
 
 @app.get('/api/news-by-day')
 def get_news_by_day_api(day: str):
