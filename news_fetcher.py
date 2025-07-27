@@ -188,6 +188,149 @@ def fetch_iranintl_news():
         print(f"خطا در دریافت اخبار IranIntl: {e}")
         return []
 
+# تابع دریافت اخبار ISNA
+def fetch_isna_news():
+    try:
+        url = 'https://www.isna.ir/'
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+        }
+        response = requests.get(url, timeout=10, headers=headers)
+        response.encoding = 'utf-8'
+        soup = BeautifulSoup(response.text, 'html.parser')
+        news_list = []
+        summarizer = PersianSummarizer()
+        all_news_items = []
+        
+        # انتخاب عناوین اخبار
+        selectors = [
+            'div.news-list h3 a',
+            'div.top-news h3 a',
+            'div.latest-news h3 a',
+            'article h3 a'
+        ]
+        
+        for selector in selectors:
+            for a_tag in soup.select(selector):
+                title = a_tag.get_text(strip=True)
+                if not title or len(title) < 10:
+                    continue
+                link = a_tag['href']
+                if not link.startswith('http'):
+                    link = 'https://www.isna.ir' + link
+                
+                # حذف تکراری
+                is_duplicate = False
+                for existing in all_news_items:
+                    if existing['title'] == title or existing['url'] == link:
+                        is_duplicate = True
+                        break
+                if not is_duplicate:
+                    all_news_items.append({'title': title, 'url': link})
+                if len(all_news_items) >= 10:
+                    break
+            if len(all_news_items) >= 10:
+                break
+        
+        print(f"تعداد کل اخبار ISNA: {len(all_news_items)}")
+        
+        for i, news_item in enumerate(all_news_items):
+            print(f"\nپردازش خبر ISNA {i+1}/{len(all_news_items)}: {news_item['title'][:50]}...")
+            summary = ""
+            try:
+                summary = summarizer.get_news_summary(news_item['url'], news_item['title'])
+            except Exception as e:
+                print(f"خطا در خلاصه‌سازی ISNA: {e}")
+                summary = ""
+            
+            today = datetime.datetime.now(timezone.utc)
+            news_list.append({
+                'title': news_item['title'],
+                'url': news_item['url'],
+                'agency': 'ISNA',
+                'published_at': today,
+                'summary': summary
+            })
+            print(f"خبر ISNA {i+1} پردازش شد")
+        
+        print(f"\nISNA news count: {len(news_list)}")
+        return news_list
+    except Exception as e:
+        print(f"خطا در دریافت اخبار ISNA: {e}")
+        return []
+
+# تابع دریافت اخبار تسنیم
+def fetch_tasnim_news():
+    try:
+        url = 'https://www.tasnimnews.com/'
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+        }
+        response = requests.get(url, timeout=10, headers=headers)
+        response.encoding = 'utf-8'
+        soup = BeautifulSoup(response.text, 'html.parser')
+        news_list = []
+        summarizer = PersianSummarizer()
+        all_news_items = []
+        
+        # انتخاب عناوین اخبار
+        selectors = [
+            'div.news-list h3 a',
+            'div.top-news h3 a',
+            'div.latest-news h3 a',
+            'article h3 a',
+            'div.news-item h3 a'
+        ]
+        
+        for selector in selectors:
+            for a_tag in soup.select(selector):
+                title = a_tag.get_text(strip=True)
+                if not title or len(title) < 10:
+                    continue
+                link = a_tag['href']
+                if not link.startswith('http'):
+                    link = 'https://www.tasnimnews.com' + link
+                
+                # حذف تکراری
+                is_duplicate = False
+                for existing in all_news_items:
+                    if existing['title'] == title or existing['url'] == link:
+                        is_duplicate = True
+                        break
+                if not is_duplicate:
+                    all_news_items.append({'title': title, 'url': link})
+                if len(all_news_items) >= 10:
+                    break
+            if len(all_news_items) >= 10:
+                break
+        
+        print(f"تعداد کل اخبار Tasnim: {len(all_news_items)}")
+        
+        for i, news_item in enumerate(all_news_items):
+            print(f"\nپردازش خبر Tasnim {i+1}/{len(all_news_items)}: {news_item['title'][:50]}...")
+            summary = ""
+            try:
+                summary = summarizer.get_news_summary(news_item['url'], news_item['title'])
+            except Exception as e:
+                print(f"خطا در خلاصه‌سازی Tasnim: {e}")
+                summary = ""
+            
+            today = datetime.datetime.now(timezone.utc)
+            news_list.append({
+                'title': news_item['title'],
+                'url': news_item['url'],
+                'agency': 'Tasnim',
+                'published_at': today,
+                'summary': summary
+            })
+            print(f"خبر Tasnim {i+1} پردازش شد")
+        
+        print(f"\nTasnim news count: {len(news_list)}")
+        return news_list
+    except Exception as e:
+        print(f"خطا در دریافت اخبار Tasnim: {e}")
+        return []
+
 def normalize_text(text):
     """نرمال کردن متن برای مقایسه"""
     if not text:
@@ -260,38 +403,73 @@ def save_news(news_items):
 if __name__ == "__main__":
     print("شروع دریافت اخبار...")
     
-    # irna_news = fetch_irna_top_news()
+    all_news = []
     
+    # دریافت اخبار IRNA
     try:
-        isna_news = fetch_irna_top_news()
-        if isna_news:
-            save_news(isna_news)
+        irna_news = fetch_irna_top_news()
+        if irna_news:
+            save_news(irna_news)
+            all_news.extend(irna_news)
         else:
             print("هیچ خبری از IRNA دریافت نشد")
     except Exception as e:
         print(f"خطا در پردازش اخبار IRNA: {e}")
-        isna_news = []
     
+    # دریافت اخبار BBC
     try:
         bbc_news = fetch_bbc_persian_news()
         if bbc_news:
             save_news(bbc_news)
+            all_news.extend(bbc_news)
         else:
             print("هیچ خبری از BBC دریافت نشد")
     except Exception as e:
         print(f"خطا در پردازش اخبار BBC: {e}")
-        bbc_news = []
     
+    # دریافت اخبار IranIntl
     try:
         iranintl_news = fetch_iranintl_news()
         if iranintl_news:
             save_news(iranintl_news)
+            all_news.extend(iranintl_news)
         else:
             print("هیچ خبری از IranIntl دریافت نشد")
     except Exception as e:
         print(f"خطا در پردازش اخبار IranIntl: {e}")
-        iranintl_news = []
     
-    total_count = len(isna_news) + len(bbc_news) + len(iranintl_news)
-    print(f"تعداد کل اخبار دریافت شده: {total_count}")
-    print("عملیات دریافت اخبار کامل شد.") 
+    # دریافت اخبار ISNA
+    try:
+        isna_news = fetch_isna_news()
+        if isna_news:
+            save_news(isna_news)
+            all_news.extend(isna_news)
+        else:
+            print("هیچ خبری از ISNA دریافت نشد")
+    except Exception as e:
+        print(f"خطا در پردازش اخبار ISNA: {e}")
+    
+    # دریافت اخبار Tasnim
+    try:
+        tasnim_news = fetch_tasnim_news()
+        if tasnim_news:
+            save_news(tasnim_news)
+            all_news.extend(tasnim_news)
+        else:
+            print("هیچ خبری از Tasnim دریافت نشد")
+    except Exception as e:
+        print(f"خطا در پردازش اخبار Tasnim: {e}")
+    
+    # خلاصه نهایی
+    agencies = {}
+    for news in all_news:
+        if news['agency'] not in agencies:
+            agencies[news['agency']] = 0
+        agencies[news['agency']] += 1
+    
+    print(f"\n📊 خلاصه نهایی:")
+    for agency, count in agencies.items():
+        print(f"  📰 {agency}: {count} خبر")
+    
+    print(f"\n✅ تعداد کل اخبار دریافت شده: {len(all_news)}")
+    print("🎯 عملیات دریافت اخبار کامل شد.") 

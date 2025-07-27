@@ -35,15 +35,26 @@ def register_persian_font():
                 print("✅ فونت Vazirmatn دانلود و ثبت شد")
                 return 'Vazirmatn'
             except:
-                print("❌ دانلود فونت ناموفق بود. استفاده از فونت جایگزین...")
-                # استفاده از فونت جایگزین
-                try:
-                    # تلاش برای استفاده از فونت‌های سیستم
-                    pdfmetrics.registerFont(TTFont('Arial', '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf'))
-                    return 'Arial'
-                except:
-                    print("⚠️ استفاده از فونت پیش‌فرض Helvetica")
-                    return 'Helvetica'
+                print("❌ دانلود فونت ناموفق بود. تلاش برای فونت‌های جایگزین...")
+                # تلاش برای فونت‌های جایگزین
+                alternative_fonts = [
+                    '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',
+                    '/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf',
+                    '/System/Library/Fonts/Arial.ttf',  # macOS
+                    'C:/Windows/Fonts/arial.ttf',  # Windows
+                ]
+                
+                for font_path in alternative_fonts:
+                    if os.path.exists(font_path):
+                        try:
+                            pdfmetrics.registerFont(TTFont('Alternative', font_path))
+                            print(f"✅ فونت جایگزین ثبت شد: {font_path}")
+                            return 'Alternative'
+                        except:
+                            continue
+                
+                print("⚠️ استفاده از فونت پیش‌فرض Helvetica")
+                return 'Helvetica'
     except Exception as e:
         print(f"❌ خطا در ثبت فونت: {e}")
         return 'Helvetica'
@@ -64,9 +75,24 @@ def clean_text_for_summary(text, max_length=150):
     text = re.sub(r'[^\u0600-\u06FF\w\s]', '', text)  # فقط حروف فارسی، انگلیسی و فاصله
     text = re.sub(r'\s+', ' ', text).strip()  # تبدیل چندین فاصله به یک فاصله
     
-    # کوتاه کردن متن
+    # کوتاه کردن متن فقط اگر خیلی طولانی باشد
     if len(text) > max_length:
-        text = text[:max_length] + "..."
+        # تلاش برای کوتاه کردن در نقطه مناسب (جملات کامل)
+        words = text.split()
+        if len(words) > 15:  # اگر بیش از 15 کلمه است
+            # پیدا کردن نقطه مناسب برای کوتاه کردن
+            cut_point = len(words)
+            for i, word in enumerate(words):
+                if len(' '.join(words[:i+1])) > max_length:
+                    cut_point = i
+                    break
+            # اگر کوتاه کردن خیلی زیاد است، کل متن را برگردان
+            if cut_point < len(words) * 0.7:  # اگر کمتر از 70% متن باقی می‌ماند
+                return text  # کل متن را برگردان
+            text = ' '.join(words[:cut_point]) + "..."
+        else:
+            # اگر متن خیلی طولانی نیست، کل آن را برگردان
+            return text
     
     return text
 

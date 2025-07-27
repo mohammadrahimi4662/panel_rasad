@@ -10,7 +10,7 @@ def convert_to_jalali(date_obj):
     jalali = jdatetime.datetime.fromgregorian(datetime=date_obj)
     return f"{jalali.year}/{jalali.month:02d}/{jalali.day:02d}"
 
-def clean_text_for_summary(text, max_length=150):
+def clean_text_for_summary(text, max_length=400):
     """پاک کردن متن و ایجاد خلاصه"""
     if not text:
         return ""
@@ -19,20 +19,24 @@ def clean_text_for_summary(text, max_length=150):
     text = re.sub(r'[^\u0600-\u06FF\w\s]', '', text)  # فقط حروف فارسی، انگلیسی و فاصله
     text = re.sub(r'\s+', ' ', text).strip()  # تبدیل چندین فاصله به یک فاصله
     
-    # کوتاه کردن متن
+    # کوتاه کردن متن فقط اگر خیلی طولانی باشد
     if len(text) > max_length:
-        # تلاش برای کوتاه کردن در نقطه مناسب
+        # تلاش برای کوتاه کردن در نقطه مناسب (جملات کامل)
         words = text.split()
-        if len(words) > 10:  # اگر بیش از 10 کلمه است
+        if len(words) > 20:  # اگر بیش از 20 کلمه است
             # پیدا کردن نقطه مناسب برای کوتاه کردن
-            cut_point = max_length
+            cut_point = len(words)
             for i, word in enumerate(words):
                 if len(' '.join(words[:i+1])) > max_length:
                     cut_point = i
                     break
+            # اگر کوتاه کردن خیلی زیاد است، کل متن را برگردان
+            if cut_point < len(words) * 0.7:  # اگر کمتر از 70% متن باقی می‌ماند
+                return text  # کل متن را برگردان
             text = ' '.join(words[:cut_point]) + "..."
         else:
-            text = text[:max_length] + "..."
+            # اگر متن خیلی طولانی نیست، کل آن را برگردان
+            return text
     
     return text
 
@@ -55,12 +59,13 @@ def generate_smart_summary(news_list):
         
         # خلاصه 5 خبر مهم هر آژانس
         for i, news in enumerate(agency_news[:5]):
-            clean_title = clean_text_for_summary(news.title, 100)
+            # استفاده از عنوان کامل
+            clean_title = news.title
             time_str = convert_to_jalali(news.published_at)
             
             # اگر خلاصه موجود باشد، از آن استفاده کن
             if news.summary:
-                summary_text = clean_text_for_summary(news.summary, 150)
+                summary_text = clean_text_for_summary(news.summary, 200)
                 summary_parts.append(f"""
                 <div class="news-item">
                     <h4>{i+1}. {clean_title}</h4>
@@ -77,7 +82,7 @@ def generate_smart_summary(news_list):
                 """)
         
         if len(agency_news) > 5:
-            summary_parts.append(f"<p class="more-news">... و {len(agency_news) - 5} خبر دیگر</p>")
+            summary_parts.append(f"<p class='more-news'>... و {len(agency_news) - 5} خبر دیگر</p>")
     
     return "\n".join(summary_parts)
 
