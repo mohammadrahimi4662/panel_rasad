@@ -48,6 +48,39 @@
             opacity: 0.9;
         }
         
+        .print-button {
+            margin-top: 20px;
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+        
+        .print-btn, .download-btn {
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            padding: 12px 24px;
+            border-radius: 25px;
+            text-decoration: none;
+            font-size: 16px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            backdrop-filter: blur(10px);
+        }
+        
+        .print-btn:hover, .download-btn:hover {
+            background: rgba(255, 255, 255, 0.3);
+            border-color: rgba(255, 255, 255, 0.5);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+        }
+        
+        .print-btn:active, .download-btn:active {
+            transform: translateY(0);
+        }
+        
         .summary-section {
             background: #e3f2fd;
             padding: 25px;
@@ -210,12 +243,21 @@
                 border-radius: 0;
             }
             
+            .print-button {
+                display: none !important;
+            }
+            
             .news-item:hover {
                 background-color: white;
             }
             
             .news-link {
                 color: #333;
+            }
+            
+            .agency-header {
+                background: #f0f0f0 !important;
+                color: #333 !important;
             }
         }
     </style>
@@ -225,6 +267,14 @@
         <div class="header">
             <h1>📰 گزارش اخبار روزانه</h1>
             <div class="date">تاریخ: 4 مرداد 1404</div>
+            <div class="print-button">
+                <button onclick="window.print()" class="print-btn">
+                    🖨️ چاپ PDF
+                </button>
+                <a href="/download-beautiful-news-pdf?day=1404-05-04" class="download-btn">
+                    📥 دانلود PDF
+                </a>
+            </div>
         </div>
 
         <div class="summary-section">
@@ -630,7 +680,7 @@
         </div>
 
         <div class="footer">
-            تولید شده در: 2025/07/26 13:08
+            تولید شده در: 2025/07/27 08:33
         </div>
     </div>
     

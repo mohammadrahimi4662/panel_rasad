@@ -21,9 +21,65 @@ def clean_text_for_summary(text, max_length=150):
     
     # کوتاه کردن متن
     if len(text) > max_length:
-        text = text[:max_length] + "..."
+        # تلاش برای کوتاه کردن در نقطه مناسب
+        words = text.split()
+        if len(words) > 10:  # اگر بیش از 10 کلمه است
+            # پیدا کردن نقطه مناسب برای کوتاه کردن
+            cut_point = max_length
+            for i, word in enumerate(words):
+                if len(' '.join(words[:i+1])) > max_length:
+                    cut_point = i
+                    break
+            text = ' '.join(words[:cut_point]) + "..."
+        else:
+            text = text[:max_length] + "..."
     
     return text
+
+def generate_smart_summary(news_list):
+    """تولید خلاصه هوشمند از اخبار"""
+    if not news_list:
+        return "هیچ خبری برای خلاصه‌سازی موجود نیست."
+    
+    # گروه‌بندی بر اساس آژانس
+    agencies = {}
+    for news in news_list:
+        if news.agency not in agencies:
+            agencies[news.agency] = []
+        agencies[news.agency].append(news)
+    
+    summary_parts = []
+    
+    for agency, agency_news in agencies.items():
+        summary_parts.append(f"<h3>📰 {agency}: {len(agency_news)} خبر</h3>")
+        
+        # خلاصه 5 خبر مهم هر آژانس
+        for i, news in enumerate(agency_news[:5]):
+            clean_title = clean_text_for_summary(news.title, 100)
+            time_str = convert_to_jalali(news.published_at)
+            
+            # اگر خلاصه موجود باشد، از آن استفاده کن
+            if news.summary:
+                summary_text = clean_text_for_summary(news.summary, 150)
+                summary_parts.append(f"""
+                <div class="news-item">
+                    <h4>{i+1}. {clean_title}</h4>
+                    <p class="summary">{summary_text}</p>
+                    <small class="time">⏰ {time_str}</small>
+                </div>
+                """)
+            else:
+                summary_parts.append(f"""
+                <div class="news-item">
+                    <h4>{i+1}. {clean_title}</h4>
+                    <small class="time">⏰ {time_str}</small>
+                </div>
+                """)
+        
+        if len(agency_news) > 5:
+            summary_parts.append(f"<p class="more-news">... و {len(agency_news) - 5} خبر دیگر</p>")
+    
+    return "\n".join(summary_parts)
 
 def generate_news_summary(news_list):
     """تولید خلاصه از اخبار"""
@@ -115,12 +171,13 @@ def generate_beautiful_news_html(day: str, output_path=None):
             font-family: 'Vazirmatn', Tahoma, Arial, sans-serif;
             line-height: 1.6;
             color: #333;
-            background: #f8f9fa;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
             padding: 20px;
         }}
         
         .container {{
-            max-width: 800px;
+            max-width: 900px;
             margin: 0 auto;
             background: white;
             border-radius: 10px;
@@ -146,6 +203,39 @@ def generate_beautiful_news_html(day: str, output_path=None):
             opacity: 0.9;
         }}
         
+        .print-button {{
+            margin-top: 20px;
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }}
+        
+        .print-btn, .download-btn {{
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            padding: 12px 24px;
+            border-radius: 25px;
+            text-decoration: none;
+            font-size: 16px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            backdrop-filter: blur(10px);
+        }}
+        
+        .print-btn:hover, .download-btn:hover {{
+            background: rgba(255, 255, 255, 0.3);
+            border-color: rgba(255, 255, 255, 0.5);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+        }}
+        
+        .print-btn:active, .download-btn:active {{
+            transform: translateY(0);
+        }}
+        
         .summary-section {{
             background: #e3f2fd;
             padding: 25px;
@@ -167,6 +257,39 @@ def generate_beautiful_news_html(day: str, output_path=None):
             font-size: 14px;
             line-height: 1.8;
             white-space: pre-line;
+        }}
+        
+        .news-item {{
+            background: #f8f9fa;
+            margin: 10px 0;
+            padding: 15px;
+            border-radius: 8px;
+            border-right: 4px solid #2196f3;
+        }}
+        
+        .news-item h4 {{
+            color: #1976d2;
+            margin-bottom: 8px;
+            font-size: 16px;
+        }}
+        
+        .news-item .summary {{
+            color: #555;
+            font-size: 14px;
+            line-height: 1.6;
+            margin: 8px 0;
+        }}
+        
+        .news-item .time {{
+            color: #888;
+            font-size: 12px;
+        }}
+        
+        .more-news {{
+            color: #666;
+            font-style: italic;
+            text-align: center;
+            margin: 10px 0;
         }}
         
         .agency-section {{
@@ -308,12 +431,21 @@ def generate_beautiful_news_html(day: str, output_path=None):
                 border-radius: 0;
             }}
             
+            .print-button {{
+                display: none !important;
+            }}
+            
             .news-item:hover {{
                 background-color: white;
             }}
             
             .news-link {{
                 color: #333;
+            }}
+            
+            .agency-header {{
+                background: #f0f0f0 !important;
+                color: #333 !important;
             }}
         }}
     </style>
@@ -323,6 +455,14 @@ def generate_beautiful_news_html(day: str, output_path=None):
         <div class="header">
             <h1>📰 گزارش اخبار روزانه</h1>
             <div class="date">تاریخ: {date_str}</div>
+            <div class="print-button">
+                <button onclick="window.print()" class="print-btn">
+                    🖨️ چاپ PDF
+                </button>
+                <a href="/download-beautiful-news-pdf?day={day}" class="download-btn">
+                    📥 دانلود PDF
+                </a>
+            </div>
         </div>
 """
     
@@ -334,12 +474,12 @@ def generate_beautiful_news_html(day: str, output_path=None):
         </div>
 """
     else:
-        # خلاصه کلی
-        summary_text = generate_news_summary(news_list)
+        # خلاصه هوشمند
+        smart_summary = generate_smart_summary(news_list)
         html_content += f"""
         <div class="summary-section">
-            <div class="summary-title">📋 خلاصه کلی اخبار</div>
-            <div class="summary-content">{summary_text}</div>
+            <div class="summary-title">📋 خلاصه هوشمند اخبار</div>
+            <div class="summary-content">{smart_summary}</div>
         </div>
 """
         
@@ -355,7 +495,7 @@ def generate_beautiful_news_html(day: str, output_path=None):
                 time_str = convert_to_jalali(news.published_at)
                 summary_html = ""
                 if news.summary:
-                    summary_text = clean_text_for_summary(news.summary, 100)
+                    summary_text = clean_text_for_summary(news.summary, 150)
                     summary_html = f'<div class="news-summary">📝 {summary_text}</div>'
                 
                 html_content += f"""

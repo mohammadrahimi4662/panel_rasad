@@ -60,12 +60,11 @@
                 <span><b>تاریخ:</b> {{ day|replace('-', '/') }}</span>
                 <div>
                                     <!-- <a href="/download-news-pdf?day={{ day }}" class="btn btn-success btn-sm">دانلود PDF</a> -->
-                <button onclick="printDayNews('{{ day }}', '{{ day|replace('-', '/') }}')" class="btn btn-primary btn-sm">چاپ PDF</button>
                 <a href="/beautiful-news-html?day={{ day }}" class="btn btn-warning btn-sm" target="_blank">
-                    <i class="fas fa-print"></i> چاپ HTML زیبا
+                    <i class="fas fa-eye"></i> مشاهده و چاپ زیبا
                 </a>
                 <a href="/download-beautiful-news-pdf?day={{ day }}" class="btn btn-success btn-sm">
-                    <i class="fas fa-file-pdf"></i> PDF زیبا با خلاصه
+                    <i class="fas fa-file-pdf"></i> دانلود PDF
                 </a>
                 </div>
             </div>

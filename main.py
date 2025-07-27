@@ -5,7 +5,7 @@ from fastapi.staticfiles import StaticFiles
 import uvicorn
 from database import SessionLocal, News, TelegramMessage
 from datetime import datetime
-from news_fetcher import fetch_isna_top_news, save_news, fetch_bbc_persian_news, fetch_iranintl_news
+from news_fetcher import fetch_irna_top_news, save_news, fetch_bbc_persian_news, fetch_iranintl_news
 from dateutil import parser as date_parser
 import jdatetime
 from fastapi.responses import FileResponse, StreamingResponse
@@ -133,7 +133,7 @@ def highlights_page(request: Request):
 def fetch_news_endpoint():
     """API endpoint برای دریافت اخبار جدید"""
     try:
-        isna_news = fetch_isna_top_news()
+        isna_news = fetch_irna_top_news()
         bbc_news = fetch_bbc_persian_news()
         iranintl_news = fetch_iranintl_news()
         save_news(isna_news)
@@ -320,7 +320,7 @@ if __name__ == "__main__":
     print("در حال دریافت اخبار جدید...")
     try:
         # دریافت اخبار جدید در ابتدای اجرا
-        isna_news = fetch_isna_top_news()
+        isna_news = fetch_irna_top_news()
         save_news(isna_news)
         print(f"تعداد {len(isna_news)} خبر جدید دریافت شد.")
     except Exception as e:

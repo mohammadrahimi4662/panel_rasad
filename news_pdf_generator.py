@@ -20,12 +20,32 @@ def register_persian_font():
         font_path = "Vazirmatn.ttf"
         if os.path.exists(font_path):
             pdfmetrics.registerFont(TTFont('Vazirmatn', font_path))
+            print("✅ فونت Vazirmatn با موفقیت ثبت شد")
             return 'Vazirmatn'
         else:
-            print("هشدار: فایل فونت Vazirmatn.ttf یافت نشد. از فونت پیش‌فرض استفاده می‌شود.")
-            return 'Helvetica'
+            print("⚠️ فایل فونت Vazirmatn.ttf یافت نشد. تلاش برای دانلود...")
+            # دانلود فونت
+            import urllib.request
+            try:
+                urllib.request.urlretrieve(
+                    "https://github.com/rastikerdar/vazirmatn/releases/download/v33.003/Vazirmatn-Regular.ttf",
+                    "Vazirmatn.ttf"
+                )
+                pdfmetrics.registerFont(TTFont('Vazirmatn', 'Vazirmatn.ttf'))
+                print("✅ فونت Vazirmatn دانلود و ثبت شد")
+                return 'Vazirmatn'
+            except:
+                print("❌ دانلود فونت ناموفق بود. استفاده از فونت جایگزین...")
+                # استفاده از فونت جایگزین
+                try:
+                    # تلاش برای استفاده از فونت‌های سیستم
+                    pdfmetrics.registerFont(TTFont('Arial', '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf'))
+                    return 'Arial'
+                except:
+                    print("⚠️ استفاده از فونت پیش‌فرض Helvetica")
+                    return 'Helvetica'
     except Exception as e:
-        print(f"خطا در ثبت فونت: {e}")
+        print(f"❌ خطا در ثبت فونت: {e}")
         return 'Helvetica'
 
 def convert_to_jalali(date_obj):
