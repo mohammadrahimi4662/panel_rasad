@@ -10,7 +10,9 @@ from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-from persian_summarizer import PersianSummarizer
+import openai
+import os
+import re
 
 # تابع دریافت اخبار مهم از IRNA با خلاصه‌سازی هوشمند
 
@@ -19,7 +21,6 @@ def fetch_irna_top_news():
     response = requests.get(url)
     soup = BeautifulSoup(response.text, 'html.parser')
     news_list = []
-    summarizer = PersianSummarizer()
     all_news_items = []
     for item in soup.select('div.top-news a')[:10]:
         title = item.get_text(strip=True)
@@ -35,14 +36,16 @@ def fetch_irna_top_news():
         if not is_duplicate:
             all_news_items.append({'title': title, 'url': link})
     print(f"تعداد کل اخبار IRNA: {len(all_news_items)}")
+    
     for i, news_item in enumerate(all_news_items):
         print(f"\nپردازش خبر IRNA {i+1}/{len(all_news_items)}: {news_item['title'][:50]}...")
         summary = ""
         try:
-            summary = summarizer.get_news_summary(news_item['url'], news_item['title'])
+            summary = extract_irna_content_with_summary(news_item['url'], news_item['title'])
         except Exception as e:
-            print(f"خطا در خلاصه‌سازی IRNA: {e}")
+            print(f"خطا در استخراج محتوای IRNA: {e}")
             summary = ""
+        
         today = datetime.datetime.now(timezone.utc)
         news_list.append({
             'title': news_item['title'],
@@ -52,8 +55,61 @@ def fetch_irna_top_news():
             'summary': summary
         })
         print(f"خبر IRNA {i+1} پردازش شد")
+    
     print(f"\nIRNA news count: {len(news_list)}")
     return news_list
+
+def extract_irna_content(url):
+    """استخراج محتوای اصلی خبر از IRNA"""
+    try:
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+        }
+        response = requests.get(url, timeout=10, headers=headers)
+        response.encoding = 'utf-8'
+        soup = BeautifulSoup(response.text, 'html.parser')
+        
+        content_parts = []
+        
+        # جستجو در محتوای اصلی IRNA
+        selectors = [
+            'div.news-content p',
+            'div.news-text p',
+            'div.content p',
+            'article p'
+        ]
+        
+        for selector in selectors:
+            paragraphs = soup.select(selector)
+            for p in paragraphs:
+                text = p.get_text(strip=True)
+                if text and len(text) > 30 and len(text) < 1000:
+                    content_parts.append(text)
+                if len(content_parts) >= 5:
+                    break
+            if len(content_parts) >= 5:
+                break
+        
+        # ترکیب محتوا
+        if content_parts:
+            full_content = ' '.join(content_parts)
+            if len(full_content) > 2000:
+                full_content = full_content[:2000] + "..."
+            return full_content
+        else:
+            return ""
+            
+    except Exception as e:
+        print(f"خطا در استخراج محتوای IRNA: {e}")
+        return ""
+
+def extract_irna_content_with_summary(url, title):
+    """استخراج محتوای IRNA و خلاصه‌سازی با ChatGPT"""
+    content = extract_irna_content(url)
+    if content:
+        # IRNA روتیتر ندارد، از ChatGPT استفاده کن
+        return get_chatgpt_summary(content, title)
+    return ""
 
 # تابع دریافت اخبار BBC فارسی با خلاصه‌سازی هوشمند
 
@@ -67,7 +123,6 @@ def fetch_bbc_persian_news():
         response.encoding = 'utf-8'
         soup = BeautifulSoup(response.text, 'html.parser')
         news_list = []
-        summarizer = PersianSummarizer()
         all_news_items = []
         selectors = [
             'ul[data-testid="topic-promos"] > li h2 a',
@@ -98,9 +153,10 @@ def fetch_bbc_persian_news():
             print(f"\nپردازش خبر BBC {i+1}/{len(all_news_items)}: {news_item['title'][:50]}...")
             summary = ""
             try:
-                summary = summarizer.get_news_summary(news_item['url'], news_item['title'])
+                # استخراج محتوای اصلی خبر
+                summary = extract_bbc_content_with_summary(news_item['url'], news_item['title'])
             except Exception as e:
-                print(f"خطا در خلاصه‌سازی BBC: {e}")
+                print(f"خطا در استخراج محتوای BBC: {e}")
                 summary = ""
             today = datetime.datetime.now(timezone.utc)
             news_list.append({
@@ -117,6 +173,62 @@ def fetch_bbc_persian_news():
         print(f"خطا در دریافت اخبار BBC: {e}")
         return []
 
+def extract_bbc_content(url):
+    """استخراج محتوای اصلی خبر از BBC"""
+    try:
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+        }
+        response = requests.get(url, timeout=10, headers=headers)
+        response.encoding = 'utf-8'
+        soup = BeautifulSoup(response.text, 'html.parser')
+        
+        # استخراج محتوای اصلی با کلاس‌های مشخص شده
+        content_parts = []
+        
+        # جستجو در div با کلاس bbc-4wucq3 ebmt73l0
+        main_content_divs = soup.find_all('div', class_='bbc-4wucq3 ebmt73l0')
+        for div in main_content_divs:
+            # جستجو در p با کلاس bbc-1gjryo4 e17g058b0
+            paragraphs = div.find_all('p', class_='bbc-1gjryo4 e17g058b0')
+            for p in paragraphs:
+                text = p.get_text(strip=True)
+                if text and len(text) > 20:  # فقط متن‌های معنادار
+                    content_parts.append(text)
+        
+        # اگر محتوای اصلی پیدا نشد، از روش جایگزین استفاده کن
+        if not content_parts:
+            # جستجو در تمام p های موجود
+            paragraphs = soup.find_all('p')
+            for p in paragraphs:
+                text = p.get_text(strip=True)
+                if text and len(text) > 50 and len(text) < 1000:  # متن‌های متوسط
+                    content_parts.append(text)
+                if len(content_parts) >= 5:  # حداکثر 5 پاراگراف
+                    break
+        
+        # ترکیب محتوا
+        if content_parts:
+            full_content = ' '.join(content_parts)
+            # کوتاه کردن اگر خیلی طولانی باشد
+            if len(full_content) > 2000:
+                full_content = full_content[:2000] + "..."
+            return full_content
+        else:
+            return ""
+            
+    except Exception as e:
+        print(f"خطا در استخراج محتوای BBC: {e}")
+        return ""
+
+def extract_bbc_content_with_summary(url, title):
+    """استخراج محتوای BBC و خلاصه‌سازی با ChatGPT"""
+    content = extract_bbc_content(url)
+    if content:
+        # BBC روتیتر ندارد، از ChatGPT استفاده کن
+        return get_chatgpt_summary(content, title)
+    return ""
+
 # تابع دریافت اخبار ایران اینترنشنال با خلاصه‌سازی هوشمند
 
 def fetch_iranintl_news():
@@ -129,7 +241,6 @@ def fetch_iranintl_news():
         response.encoding = 'utf-8'
         soup = BeautifulSoup(response.text, 'html.parser')
         news_list = []
-        summarizer = PersianSummarizer()
         all_news_items = []
         selectors = [
             'article h3',
@@ -169,9 +280,9 @@ def fetch_iranintl_news():
             print(f"\nپردازش خبر IranIntl {i+1}/{len(all_news_items)}: {news_item['title'][:50]}...")
             summary = ""
             try:
-                summary = summarizer.get_news_summary(news_item['url'], news_item['title'])
+                summary = extract_iranintl_content_with_summary(news_item['url'], news_item['title'])
             except Exception as e:
-                print(f"خطا در خلاصه‌سازی IranIntl: {e}")
+                print(f"خطا در استخراج محتوای IranIntl: {e}")
                 summary = ""
             today = datetime.datetime.now(timezone.utc)
             news_list.append({
@@ -187,6 +298,82 @@ def fetch_iranintl_news():
     except Exception as e:
         print(f"خطا در دریافت اخبار IranIntl: {e}")
         return []
+
+def extract_iranintl_content(url):
+    """استخراج محتوای اصلی خبر از IranIntl"""
+    try:
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+        }
+        response = requests.get(url, timeout=10, headers=headers)
+        response.encoding = 'utf-8'
+        soup = BeautifulSoup(response.text, 'html.parser')
+        
+        content_parts = []
+        lead_paragraph = ""
+        
+        # جستجو در محتوای اصلی IranIntl
+        selectors = [
+            'div.article-content p',
+            'div.content p',
+            'article p',
+            'div.article-body p'
+        ]
+        
+        # ابتدا به دنبال روتیتر (پاراگراف اول) بگرد
+        for selector in selectors:
+            paragraphs = soup.select(selector)
+            if paragraphs:
+                # پاراگراف اول معمولاً روتیتر است
+                lead_text = paragraphs[0].get_text(strip=True)
+                if lead_text and len(lead_text) > 50 and len(lead_text) < 300:
+                    lead_paragraph = lead_text
+                    print(f"✅ روتیتر IranIntl پیدا شد: {lead_text[:100]}...")
+                    break
+        
+        # اگر روتیتر پیدا شد، آن را برگردان
+        if lead_paragraph:
+            return lead_paragraph
+        
+        # اگر روتیتر پیدا نشد، از ChatGPT استفاده کن
+        for selector in selectors:
+            paragraphs = soup.select(selector)
+            for p in paragraphs:
+                text = p.get_text(strip=True)
+                if text and len(text) > 30 and len(text) < 1000:
+                    content_parts.append(text)
+                if len(content_parts) >= 5:
+                    break
+            if len(content_parts) >= 5:
+                break
+        
+        # ترکیب محتوا
+        if content_parts:
+            full_content = ' '.join(content_parts)
+            if len(full_content) > 2000:
+                full_content = full_content[:2000] + "..."
+            return full_content
+        else:
+            return ""
+            
+    except Exception as e:
+        print(f"خطا در استخراج محتوای IranIntl: {e}")
+        return ""
+
+def extract_iranintl_content_with_summary(url, title):
+    """استخراج محتوای IranIntl و تشخیص روتیتر"""
+    content = extract_iranintl_content(url)
+    if content:
+        # بررسی اینکه آیا این روتیتر است یا نه
+        if len(content) < 300 and not content.endswith("..."):
+            # احتمالاً روتیتر است
+            print("✅ از روتیتر IranIntl استفاده می‌شود")
+            return content
+        else:
+            # از ChatGPT استفاده کن
+            print("🔄 از ChatGPT برای خلاصه‌سازی استفاده می‌شود")
+            return get_chatgpt_summary(content, title)
+    return ""
 
 # تابع دریافت اخبار ISNA
 def fetch_isna_news():
@@ -238,9 +425,9 @@ def fetch_isna_news():
             print(f"\nپردازش خبر ISNA {i+1}/{len(all_news_items)}: {news_item['title'][:50]}...")
             summary = ""
             try:
-                summary = summarizer.get_news_summary(news_item['url'], news_item['title'])
+                summary = extract_isna_content_with_summary(news_item['url'], news_item['title'])
             except Exception as e:
-                print(f"خطا در خلاصه‌سازی ISNA: {e}")
+                print(f"خطا در استخراج محتوای ISNA: {e}")
                 summary = ""
             
             today = datetime.datetime.now(timezone.utc)
@@ -310,9 +497,9 @@ def fetch_tasnim_news():
             print(f"\nپردازش خبر Tasnim {i+1}/{len(all_news_items)}: {news_item['title'][:50]}...")
             summary = ""
             try:
-                summary = summarizer.get_news_summary(news_item['url'], news_item['title'])
+                summary = extract_tasnim_content_with_summary(news_item['url'], news_item['title'])
             except Exception as e:
-                print(f"خطا در خلاصه‌سازی Tasnim: {e}")
+                print(f"خطا در استخراج محتوای Tasnim: {e}")
                 summary = ""
             
             today = datetime.datetime.now(timezone.utc)
@@ -331,12 +518,157 @@ def fetch_tasnim_news():
         print(f"خطا در دریافت اخبار Tasnim: {e}")
         return []
 
+def extract_isna_content(url):
+    """استخراج محتوای اصلی خبر از ISNA"""
+    try:
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+        }
+        response = requests.get(url, timeout=10, headers=headers)
+        response.encoding = 'utf-8'
+        soup = BeautifulSoup(response.text, 'html.parser')
+        
+        content_parts = []
+        
+        # جستجو در محتوای اصلی ISNA
+        selectors = [
+            'div.news-content p',
+            'div.news-text p',
+            'div.content p',
+            'article p',
+            'div.news-body p'
+        ]
+        
+        for selector in selectors:
+            paragraphs = soup.select(selector)
+            for p in paragraphs:
+                text = p.get_text(strip=True)
+                if text and len(text) > 30 and len(text) < 1000:
+                    content_parts.append(text)
+                if len(content_parts) >= 5:
+                    break
+            if len(content_parts) >= 5:
+                break
+        
+        # ترکیب محتوا
+        if content_parts:
+            full_content = ' '.join(content_parts)
+            if len(full_content) > 2000:
+                full_content = full_content[:2000] + "..."
+            return full_content
+        else:
+            return ""
+            
+    except Exception as e:
+        print(f"خطا در استخراج محتوای ISNA: {e}")
+        return ""
+
+def extract_isna_content_with_summary(url, title):
+    """استخراج محتوای ISNA و خلاصه‌سازی با ChatGPT"""
+    content = extract_isna_content(url)
+    if content:
+        # ISNA روتیتر ندارد، از ChatGPT استفاده کن
+        return get_chatgpt_summary(content, title)
+    return ""
+
+def extract_tasnim_content(url):
+    """استخراج محتوای اصلی خبر از Tasnim"""
+    try:
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+        }
+        response = requests.get(url, timeout=10, headers=headers)
+        response.encoding = 'utf-8'
+        soup = BeautifulSoup(response.text, 'html.parser')
+        
+        content_parts = []
+        
+        # جستجو در محتوای اصلی Tasnim
+        selectors = [
+            'div.news-content p',
+            'div.news-text p',
+            'div.content p',
+            'article p',
+            'div.news-body p'
+        ]
+        
+        for selector in selectors:
+            paragraphs = soup.select(selector)
+            for p in paragraphs:
+                text = p.get_text(strip=True)
+                if text and len(text) > 30 and len(text) < 1000:
+                    content_parts.append(text)
+                if len(content_parts) >= 5:
+                    break
+            if len(content_parts) >= 5:
+                break
+        
+        # ترکیب محتوا
+        if content_parts:
+            full_content = ' '.join(content_parts)
+            if len(full_content) > 2000:
+                full_content = full_content[:2000] + "..."
+            return full_content
+        else:
+            return ""
+            
+    except Exception as e:
+        print(f"خطا در استخراج محتوای Tasnim: {e}")
+        return ""
+
+def extract_tasnim_content_with_summary(url, title):
+    """استخراج محتوای Tasnim و خلاصه‌سازی با ChatGPT"""
+    content = extract_tasnim_content(url)
+    if content:
+        # Tasnim روتیتر ندارد، از ChatGPT استفاده کن
+        return get_chatgpt_summary(content, title)
+    return ""
+
+def get_chatgpt_summary(text, title):
+    """دریافت خلاصه از ChatGPT"""
+    try:
+        # تنظیم API key (اگر موجود باشد)
+        api_key = os.getenv('OPENAI_API_KEY')
+        if not api_key:
+            print("⚠️ OPENAI_API_KEY تنظیم نشده است. از متن کامل استفاده می‌شود.")
+            return text[:500] + "..." if len(text) > 500 else text
+        
+        openai.api_key = api_key
+        
+        prompt = f"""
+        عنوان خبر: {title}
+        
+        متن کامل خبر:
+        {text}
+        
+        لطفاً این خبر را در یک پاراگراف کوتاه و معنادار خلاصه کنید. 
+        خلاصه باید شامل نکات اصلی و مهم خبر باشد و به زبان فارسی نوشته شود.
+        حداکثر 200 کلمه باشد.
+        """
+        
+        response = openai.ChatCompletion.create(
+            model="gpt-3.5-turbo",
+            messages=[
+                {"role": "system", "content": "شما یک خبرنگار حرفه‌ای هستید که اخبار را خلاصه می‌کند."},
+                {"role": "user", "content": prompt}
+            ],
+            max_tokens=300,
+            temperature=0.7
+        )
+        
+        summary = response.choices[0].message.content.strip()
+        return summary
+        
+    except Exception as e:
+        print(f"خطا در دریافت خلاصه از ChatGPT: {e}")
+        # در صورت خطا، از متن کوتاه شده استفاده کن
+        return text[:500] + "..." if len(text) > 500 else text
+
 def normalize_text(text):
     """نرمال کردن متن برای مقایسه"""
     if not text:
         return ""
     # حذف کاراکترهای خاص و نرمال کردن
-    import re
     text = text.strip().lower()
     text = re.sub(r'[^\w\s]', '', text)  # حذف علائم نگارشی
     text = re.sub(r'\s+', ' ', text)     # تبدیل چندین فاصله به یک فاصله
