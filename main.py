@@ -1,11 +1,11 @@
-from fastapi import FastAPI, Request, Query, HTTPException
+from fastapi import FastAPI, Request, Query, HTTPException, Form
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
 import uvicorn
-from database import SessionLocal, News, TelegramMessage
+from database import SessionLocal, News, TelegramMessage, DailyMessage
 from datetime import datetime
-from news_fetcher import fetch_irna_top_news, save_news, fetch_bbc_persian_news, fetch_iranintl_news
+from news_fetcher import fetch_irna_top_news, save_news, fetch_bbc_persian_news, fetch_iranintl_news, fetch_isna_news
 from dateutil import parser as date_parser
 import jdatetime
 from fastapi.responses import FileResponse, StreamingResponse
@@ -16,6 +16,23 @@ from reportlab.lib import colors
 import io
 from news_pdf_generator import generate_beautiful_news_pdf
 from beautiful_news_html import generate_beautiful_news_html
+from sqlalchemy import or_, func
+import re
+from daily_messages import create_daily_message, get_today_messages, generate_daily_pdf, generate_html_report
+
+FILTERS_FILE = 'filters.txt'
+
+def load_filters():
+    try:
+        with open(FILTERS_FILE, 'r', encoding='utf-8') as f:
+            return [line.strip() for line in f if line.strip()]
+    except Exception:
+        return []
+
+def save_filters(filters):
+    with open(FILTERS_FILE, 'w', encoding='utf-8') as f:
+        for kw in filters:
+            f.write(kw.strip() + '\n')
 
 app = FastAPI()
 
@@ -48,6 +65,10 @@ def group_news_by_day(news_list):
             grouped[day_key] = []
         grouped[day_key].append(news)
     return dict(sorted(grouped.items(), reverse=True))
+
+def normalize_title(title):
+    # ساده‌سازی عنوان برای مقایسه (حذف علائم و فاصله اضافی)
+    return re.sub(r'\s+', ' ', re.sub(r'[\W_]+', ' ', title)).strip().lower()
 
 @app.get('/', response_class=HTMLResponse)
 def read_root(request: Request):
@@ -120,12 +141,68 @@ def telegram_page(request: Request):
         "active_page": "telegram"
     })
 
+@app.get('/filters', response_class=HTMLResponse)
+def filters_page(request: Request):
+    filters = load_filters()
+    return templates.TemplateResponse('filters.html', {
+        'request': request,
+        'filters': filters,
+        'active_page': 'filters'
+    })
+
+@app.post('/filters', response_class=HTMLResponse)
+def filters_post(request: Request, filter_item: list = Form([])):
+    # filter_item is a list of keywords
+    save_filters(filter_item)
+    return RedirectResponse('/filters', status_code=303)
+
 @app.get('/highlights', response_class=HTMLResponse)
-def highlights_page(request: Request):
-    highlights_list = []
+def highlights_page(request: Request, filter: str = Query(None), repeated: bool = Query(False)):
+    db = SessionLocal()
+    news_query = db.query(News)
+    today = jdatetime.date.today()
+    start_gregorian = jdatetime.datetime(today.year, today.month, today.day, 0, 0, 0).togregorian()
+    end_gregorian = jdatetime.datetime(today.year, today.month, today.day, 23, 59, 59).togregorian()
+    news_query = news_query.filter(News.published_at >= start_gregorian, News.published_at <= end_gregorian)
+    news_list = news_query.all()
+    highlights = []
+
+    # 1. فیلتر بر اساس کلیدواژه
+    filter_keywords = []
+    if filter:
+        filter_keywords = [k.strip() for k in filter.split(',') if k.strip()]
+    else:
+        filter_keywords = load_filters()
+    if filter_keywords:
+        for news in news_list:
+            for kw in filter_keywords:
+                if (kw in (news.title or '')) or (kw in (news.summary or '')):
+                    highlights.append(news)
+                    break
+
+    # 2. تکرار در چند خبرگزاری (بر اساس شباهت عنوان)
+    if repeated:
+        # گروه‌بندی اخبار بر اساس عنوان نرمال‌شده
+        title_map = {}
+        for news in news_list:
+            norm = normalize_title(news.title or '')
+            if not norm:
+                continue
+            if norm not in title_map:
+                title_map[norm] = []
+            title_map[norm].append(news)
+        for group in title_map.values():
+            agencies = set(n.agency for n in group)
+            if len(agencies) >= 2:
+                highlights.extend(group)
+    # حذف تکراری‌ها
+    highlights = list({n.id: n for n in highlights}.values())
+    # مرتب‌سازی بر اساس زمان انتشار
+    highlights.sort(key=lambda n: n.published_at, reverse=True)
+    db.close()
     return templates.TemplateResponse('highlights.html', {
         "request": request,
-        "highlights_list": highlights_list,
+        "highlights_list": highlights,
         "active_page": "highlights"
     })
 
@@ -133,13 +210,15 @@ def highlights_page(request: Request):
 def fetch_news_endpoint():
     """API endpoint برای دریافت اخبار جدید"""
     try:
-        isna_news = fetch_irna_top_news()
+        irna_news = fetch_irna_top_news()
         bbc_news = fetch_bbc_persian_news()
         iranintl_news = fetch_iranintl_news()
-        save_news(isna_news)
+        isna_news = fetch_isna_news()
+        save_news(irna_news)
         save_news(bbc_news)
         save_news(iranintl_news)
-        total_count = len(isna_news) + len(bbc_news) + len(iranintl_news)
+        save_news(isna_news)
+        total_count = len(irna_news) + len(bbc_news) + len(iranintl_news) + len(isna_news)
         return {"message": "اخبار با موفقیت دریافت و ذخیره شد", "count": total_count}
     except Exception as e:
         return {"error": f"خطا در دریافت اخبار: {str(e)}"}
@@ -314,6 +393,50 @@ def delete_news(news_id: int):
     db.commit()
     db.close()
     return {"message": "خبر با موفقیت حذف شد"}
+
+@app.get('/daily-messages', response_class=HTMLResponse)
+def daily_messages_page(request: Request):
+    """صفحه پیام‌های روزانه"""
+    try:
+        report = generate_html_report()
+        return templates.TemplateResponse('daily_messages.html', {
+            "request": request, 
+            "report": report,
+            "active_page": "daily_messages"
+        })
+    except Exception as e:
+        return HTMLResponse(f"خطا در بارگذاری صفحه: {e}", status_code=500)
+
+@app.post('/api/daily-message')
+async def create_daily_message_api(request: Request):
+    """API برای ایجاد پیام روزانه جدید"""
+    try:
+        body = await request.json()
+        title = body.get('title')
+        content = body.get('content')
+        category = body.get('category', 'عمومی')
+        priority = body.get('priority', 1)
+        
+        if not title or not content:
+            return {"error": "عنوان و محتوا الزامی است"}
+        
+        message = create_daily_message(title, content, category, priority)
+        return {"message": "پیام با موفقیت اضافه شد", "id": message.id}
+    except Exception as e:
+        return {"error": f"خطا در ایجاد پیام: {str(e)}"}
+
+@app.get('/download-daily-pdf')
+def download_daily_pdf():
+    """دانلود PDF پیام‌های روزانه"""
+    try:
+        output_path = generate_daily_pdf()
+        return FileResponse(
+            path=output_path,
+            media_type='application/pdf',
+            filename='daily_messages.pdf'
+        )
+    except Exception as e:
+        return HTMLResponse(f"خطا در تولید PDF: {e}", status_code=500)
 
 if __name__ == "__main__":
     print("شروع سرور...")

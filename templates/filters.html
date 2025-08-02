@@ -1,0 +1,46 @@
+{% extends 'base.html' %}
+{% block title %}مدیریت فیلترها{% endblock %}
+{% block topbar %}مدیریت فیلترهای اخبار مهم{% endblock %}
+{% block content %}
+<h3 class="mb-4">مدیریت فیلترهای اخبار مهم</h3>
+<div class="card mb-4">
+  <div class="card-header">فیلترهای فعلی</div>
+  <div class="card-body">
+    <form id="filtersForm" method="post" action="/filters" class="row g-2 align-items-end">
+      <div class="col-12 col-md-8" id="filters-container">
+        {% for f in filters %}
+        <div class="input-group mb-2 filter-row">
+          <input type="text" name="filter_item" class="form-control" value="{{ f }}" placeholder="کلیدواژه خبر مهم">
+          <button type="button" class="btn btn-danger remove-filter">حذف</button>
+        </div>
+        {% endfor %}
+        {% if not filters %}
+        <div class="input-group mb-2 filter-row">
+          <input type="text" name="filter_item" class="form-control" placeholder="کلیدواژه خبر مهم">
+          <button type="button" class="btn btn-danger remove-filter">حذف</button>
+        </div>
+        {% endif %}
+      </div>
+      <div class="col-12 col-md-4 d-flex flex-column gap-2">
+        <button type="button" class="btn btn-secondary mb-2" id="addFilter">افزودن فیلتر جدید</button>
+        <button type="submit" class="btn btn-primary">ذخیره فیلترها</button>
+      </div>
+    </form>
+  </div>
+</div>
+<script>
+const filtersContainer = document.getElementById('filters-container');
+document.getElementById('addFilter').onclick = function() {
+  const div = document.createElement('div');
+  div.className = 'input-group mb-2 filter-row';
+  div.innerHTML = `<input type="text" name="filter_item" class="form-control" placeholder="کلیدواژه خبر مهم">
+    <button type="button" class="btn btn-danger remove-filter">حذف</button>`;
+  filtersContainer.appendChild(div);
+};
+filtersContainer.addEventListener('click', function(e) {
+  if (e.target.classList.contains('remove-filter')) {
+    e.target.parentElement.remove();
+  }
+});
+</script>
+{% endblock %} 

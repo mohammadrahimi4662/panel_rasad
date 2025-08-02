@@ -17,50 +17,119 @@ import re
 # تابع دریافت اخبار مهم از IRNA با خلاصه‌سازی هوشمند
 
 def fetch_irna_top_news():
-    url = 'https://www.irna.ir/'
-    response = requests.get(url)
-    soup = BeautifulSoup(response.text, 'html.parser')
-    news_list = []
-    all_news_items = []
-    for item in soup.select('div.top-news a')[:10]:
-        title = item.get_text(strip=True)
-        link = item['href']
-        if not link.startswith('http'):
-            link = 'https://www.irna.ir' + link
-        # حذف تکراری
-        is_duplicate = False
-        for existing in all_news_items:
-            if existing['title'] == title or existing['url'] == link:
-                is_duplicate = True
-                break
-        if not is_duplicate:
-            all_news_items.append({'title': title, 'url': link})
-    print(f"تعداد کل اخبار IRNA: {len(all_news_items)}")
-    
-    for i, news_item in enumerate(all_news_items):
-        print(f"\nپردازش خبر IRNA {i+1}/{len(all_news_items)}: {news_item['title'][:50]}...")
-        summary = ""
-        try:
-            summary = extract_irna_content_with_summary(news_item['url'], news_item['title'])
-        except Exception as e:
-            print(f"خطا در استخراج محتوای IRNA: {e}")
-            summary = ""
+    """دریافت اخبار مهم از IRNA با استفاده از Selenium برای دور زدن Cloudflare"""
+    try:
+        # تنظیمات Chrome برای Selenium
+        chrome_options = Options()
+        chrome_options.add_argument('--headless')  # اجرا بدون نمایش
+        chrome_options.add_argument('--no-sandbox')
+        chrome_options.add_argument('--disable-dev-shm-usage')
+        chrome_options.add_argument('--disable-gpu')
+        chrome_options.add_argument('--window-size=1920,1080')
+        chrome_options.add_argument('--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36')
         
-        today = datetime.datetime.now(timezone.utc)
-        news_list.append({
-            'title': news_item['title'],
-            'url': news_item['url'],
-            'agency': 'IRNA',
-            'published_at': today,
-            'summary': summary
-        })
-        print(f"خبر IRNA {i+1} پردازش شد")
-    
-    print(f"\nIRNA news count: {len(news_list)}")
-    return news_list
+        # استفاده از ChromeDriver - نسخه جدید Selenium
+        try:
+            driver = webdriver.Chrome(options=chrome_options)
+        except:
+            # اگر ChromeDriver در PATH نباشد، از مسیر محلی استفاده کن
+            driver_path = './chromedriver.exe'
+            from selenium.webdriver.chrome.service import Service
+            service = Service(executable_path=driver_path)
+            driver = webdriver.Chrome(service=service, options=chrome_options)
+        
+        try:
+            url = 'https://www.irna.ir/'
+            driver.get(url)
+            
+            # انتظار برای لود شدن صفحه
+            WebDriverWait(driver, 10).until(
+                EC.presence_of_element_located((By.TAG_NAME, "body"))
+            )
+            
+            # انتظار بیشتر برای Cloudflare
+            import time
+            time.sleep(5)
+            
+            # دریافت محتوای صفحه
+            page_source = driver.page_source
+            soup = BeautifulSoup(page_source, 'html.parser')
+            
+            news_list = []
+            all_news_items = []
+            
+            # جستجوی اخبار با selector های مختلف
+            selectors = [
+                'div.top-news a',
+                'div.news-item a',
+                'div.breaking-news a',
+                'div.latest-news a',
+                'div.news-list a',
+                'a[href*="/news/"]',
+                'a[href*="/fa/news/"]'
+            ]
+            
+            for selector in selectors:
+                items = soup.select(selector)
+                if items:
+                    print(f"Found {len(items)} items with selector: {selector}")
+                    for item in items[:10]:
+                        title = item.get_text(strip=True)
+                        link = item.get('href', '')
+                        
+                        if not title or not link:
+                            continue
+                            
+                        if not link.startswith('http'):
+                            link = 'https://www.irna.ir' + link
+                        
+                        # حذف تکراری
+                        is_duplicate = False
+                        for existing in all_news_items:
+                            if existing['title'] == title or existing['url'] == link:
+                                is_duplicate = True
+                                break
+                        
+                        if not is_duplicate and len(title) > 10:
+                            all_news_items.append({'title': title, 'url': link})
+                    
+                    if all_news_items:
+                        break
+            
+            print(f"تعداد کل اخبار IRNA: {len(all_news_items)}")
+            
+            for i, news_item in enumerate(all_news_items):
+                print(f"\nپردازش خبر IRNA {i+1}/{len(all_news_items)}: {news_item['title'][:50]}...")
+                try:
+                    result = extract_irna_content_with_summary(news_item['url'], news_item['title'])
+                    title = result['title']
+                    summary = result['summary']
+                except Exception as e:
+                    print(f"خطا در استخراج محتوای IRNA: {e}")
+                    title = news_item['title']
+                    summary = ''
+                today = datetime.datetime.now(timezone.utc)
+                news_list.append({
+                    'title': title,
+                    'url': news_item['url'],
+                    'agency': 'IRNA',
+                    'published_at': today,
+                    'summary': summary
+                })
+                print(f"خبر IRNA {i+1} پردازش شد")
+            
+            print(f"\nIRNA news count: {len(news_list)}")
+            return news_list
+            
+        finally:
+            driver.quit()
+            
+    except Exception as e:
+        print(f"خطا در دریافت اخبار IRNA: {e}")
+        return []
 
 def extract_irna_content(url):
-    """استخراج محتوای اصلی خبر از IRNA"""
+    """استخراج محتوای اصلی خبر از IRNA (عنوان و خلاصه)"""
     try:
         headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
@@ -68,17 +137,41 @@ def extract_irna_content(url):
         response = requests.get(url, timeout=10, headers=headers)
         response.encoding = 'utf-8'
         soup = BeautifulSoup(response.text, 'html.parser')
-        
+
+        # --- New logic for IRNA ---
+        # Extract title from <a itemprop="headline">
+        title_tag = soup.find('a', itemprop='headline')
+        if title_tag and title_tag.text.strip():
+            title = title_tag.text.strip()
+        else:
+            # fallback: try <h1 class="title"> or <title>
+            h1_title = soup.find('h1', class_='title')
+            if h1_title and h1_title.text.strip():
+                title = h1_title.text.strip()
+            else:
+                title = soup.title.text.strip() if soup.title else ''
+
+        # Extract summary from <p class="summary introtext" itemprop="description">
+        summary_tag = soup.find('p', class_='summary introtext', itemprop='description')
+        if summary_tag and summary_tag.text.strip():
+            summary = summary_tag.text.strip()
+        else:
+            # fallback: try first <p> in article
+            article = soup.find('article')
+            if article:
+                p = article.find('p')
+                summary = p.text.strip() if p else ''
+            else:
+                summary = ''
+
+        # Extract main content as before (for ChatGPT summarization)
         content_parts = []
-        
-        # جستجو در محتوای اصلی IRNA
         selectors = [
             'div.news-content p',
             'div.news-text p',
             'div.content p',
             'article p'
         ]
-        
         for selector in selectors:
             paragraphs = soup.select(selector)
             for p in paragraphs:
@@ -89,27 +182,32 @@ def extract_irna_content(url):
                     break
             if len(content_parts) >= 5:
                 break
-        
-        # ترکیب محتوا
         if content_parts:
             full_content = ' '.join(content_parts)
             if len(full_content) > 2000:
                 full_content = full_content[:2000] + "..."
-            return full_content
         else:
-            return ""
-            
+            full_content = ''
+
+        return {
+            'title': title,
+            'summary': summary,
+            'content': full_content
+        }
     except Exception as e:
         print(f"خطا در استخراج محتوای IRNA: {e}")
-        return ""
+        return {'title': '', 'summary': '', 'content': ''}
 
-def extract_irna_content_with_summary(url, title):
-    """استخراج محتوای IRNA و خلاصه‌سازی با ChatGPT"""
-    content = extract_irna_content(url)
-    if content:
-        # IRNA روتیتر ندارد، از ChatGPT استفاده کن
-        return get_chatgpt_summary(content, title)
-    return ""
+def extract_irna_content_with_summary(url, homepage_title=None):
+    """استخراج محتوای IRNA و خلاصه‌سازی با ChatGPT و بازگرداندن عنوان صحیح"""
+    data = extract_irna_content(url)
+    title = data['title'] if data['title'] else (homepage_title or '')
+    summary = data['summary']
+    content = data['content']
+    # اگر خلاصه نبود، از ChatGPT خلاصه بساز
+    if not summary and content:
+        summary = get_chatgpt_summary(content, title)
+    return {'title': title, 'summary': summary}
 
 # تابع دریافت اخبار BBC فارسی با خلاصه‌سازی هوشمند
 
@@ -377,71 +475,126 @@ def extract_iranintl_content_with_summary(url, title):
 
 # تابع دریافت اخبار ISNA
 def fetch_isna_news():
+    """دریافت اخبار مهم از ISNA با استفاده از Selenium برای دور زدن Cloudflare"""
     try:
-        url = 'https://www.isna.ir/'
-        headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-        }
-        response = requests.get(url, timeout=10, headers=headers)
-        response.encoding = 'utf-8'
-        soup = BeautifulSoup(response.text, 'html.parser')
-        news_list = []
-        summarizer = PersianSummarizer()
-        all_news_items = []
+        # تنظیمات Chrome برای Selenium
+        chrome_options = Options()
+        chrome_options.add_argument('--headless')  # اجرا بدون نمایش
+        chrome_options.add_argument('--no-sandbox')
+        chrome_options.add_argument('--disable-dev-shm-usage')
+        chrome_options.add_argument('--disable-gpu')
+        chrome_options.add_argument('--window-size=1920,1080')
+        chrome_options.add_argument('--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36')
         
-        # انتخاب عناوین اخبار
-        selectors = [
-            'div.news-list h3 a',
-            'div.top-news h3 a',
-            'div.latest-news h3 a',
-            'article h3 a'
-        ]
+        # استفاده از ChromeDriver - نسخه جدید Selenium
+        try:
+            driver = webdriver.Chrome(options=chrome_options)
+        except:
+            # اگر ChromeDriver در PATH نباشد، از مسیر محلی استفاده کن
+            driver_path = './chromedriver.exe'
+            from selenium.webdriver.chrome.service import Service
+            service = Service(executable_path=driver_path)
+            driver = webdriver.Chrome(service=service, options=chrome_options)
         
-        for selector in selectors:
-            for a_tag in soup.select(selector):
-                title = a_tag.get_text(strip=True)
-                if not title or len(title) < 10:
-                    continue
-                link = a_tag['href']
-                if not link.startswith('http'):
-                    link = 'https://www.isna.ir' + link
-                
-                # حذف تکراری
-                is_duplicate = False
-                for existing in all_news_items:
-                    if existing['title'] == title or existing['url'] == link:
-                        is_duplicate = True
-                        break
-                if not is_duplicate:
-                    all_news_items.append({'title': title, 'url': link})
-                if len(all_news_items) >= 10:
-                    break
-            if len(all_news_items) >= 10:
-                break
-        
-        print(f"تعداد کل اخبار ISNA: {len(all_news_items)}")
-        
-        for i, news_item in enumerate(all_news_items):
-            print(f"\nپردازش خبر ISNA {i+1}/{len(all_news_items)}: {news_item['title'][:50]}...")
-            summary = ""
-            try:
-                summary = extract_isna_content_with_summary(news_item['url'], news_item['title'])
-            except Exception as e:
-                print(f"خطا در استخراج محتوای ISNA: {e}")
-                summary = ""
+        try:
+            url = 'https://www.isna.ir/archive'
+            driver.get(url)
             
-            today = datetime.datetime.now(timezone.utc)
-            news_list.append({
-                'title': news_item['title'],
-                'url': news_item['url'],
-                'agency': 'ISNA',
-                'published_at': today,
-                'summary': summary
-            })
-            print(f"خبر ISNA {i+1} پردازش شد")
-        
-        print(f"\nISNA news count: {len(news_list)}")
-        return news_list
+            # انتظار برای لود شدن صفحه
+            WebDriverWait(driver, 10).until(
+                EC.presence_of_element_located((By.TAG_NAME, "body"))
+            )
+            
+            # انتظار بیشتر برای Cloudflare
+            import time
+            time.sleep(5)
+            
+            # دریافت محتوای صفحه
+            page_source = driver.page_source
+            soup = BeautifulSoup(page_source, 'html.parser')
+            
+            news_list = []
+            all_news_items = []
+            
+            # انتخاب اخبار از آرشیو ISNA
+            news_items = soup.select('div.items ul li')
+            
+            for item in news_items[:15]:  # حداکثر 15 خبر
+                try:
+                    # استخراج عنوان
+                    title_elem = item.select_one('h3 a, h4 a')
+                    if not title_elem:
+                        continue
+                        
+                    title = title_elem.get_text(strip=True)
+                    if not title or len(title) < 10:
+                        continue
+                    
+                    # استخراج لینک
+                    link = title_elem.get('href', '')
+                    if not link:
+                        continue
+                        
+                    if not link.startswith('http'):
+                        link = 'https://www.isna.ir' + link
+                    
+                    # استخراج توضیحات
+                    desc_elem = item.select_one('p')
+                    description = desc_elem.get_text(strip=True) if desc_elem else ""
+                    
+                    # استخراج تاریخ
+                    time_elem = item.select_one('time a')
+                    time_text = time_elem.get('title', '') if time_elem else ""
+                    
+                    # حذف تکراری
+                    is_duplicate = False
+                    for existing in all_news_items:
+                        if existing['title'] == title or existing['url'] == link:
+                            is_duplicate = True
+                            break
+                    
+                    if not is_duplicate:
+                        all_news_items.append({
+                            'title': title, 
+                            'url': link, 
+                            'description': description,
+                            'time': time_text
+                        })
+                        
+                except Exception as e:
+                    print(f"خطا در پردازش خبر ISNA: {e}")
+                    continue
+            
+            print(f"تعداد کل اخبار ISNA: {len(all_news_items)}")
+            
+            for i, news_item in enumerate(all_news_items):
+                print(f"\nپردازش خبر ISNA {i+1}/{len(all_news_items)}: {news_item['title'][:50]}...")
+                
+                # استفاده از توضیحات موجود یا استخراج محتوا
+                summary = news_item.get('description', '')
+                if not summary:
+                    try:
+                        summary = extract_isna_content_with_summary(news_item['url'], news_item['title'])
+                    except Exception as e:
+                        print(f"خطا در استخراج محتوای ISNA: {e}")
+                        summary = ""
+                
+                today = datetime.datetime.now(timezone.utc)
+                news_list.append({
+                    'title': news_item['title'],
+                    'url': news_item['url'],
+                    'agency': 'ISNA',
+                    'published_at': today,
+                    'summary': summary
+                })
+                print(f"خبر ISNA {i+1} پردازش شد")
+            
+            print(f"\nISNA news count: {len(news_list)}")
+            return news_list
+            
+        finally:
+            driver.quit()
+            
     except Exception as e:
         print(f"خطا در دریافت اخبار ISNA: {e}")
         return []
