@@ -1,5 +1,5 @@
 from fastapi import FastAPI, Request, Query, HTTPException, Form
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
 import uvicorn
@@ -435,6 +435,194 @@ def download_daily_pdf():
             media_type='application/pdf',
             filename='daily_messages.pdf'
         )
+    except Exception as e:
+        return HTMLResponse(f"خطا در تولید PDF: {e}", status_code=500)
+
+@app.get('/view-highlights', response_class=HTMLResponse)
+def view_highlights_page(request: Request):
+    """صفحه نمایش اخبار مهم برای چاپ"""
+    try:
+        db = SessionLocal()
+        news_query = db.query(News)
+        today = jdatetime.date.today()
+        start_gregorian = jdatetime.datetime(today.year, today.month, today.day, 0, 0, 0).togregorian()
+        end_gregorian = jdatetime.datetime(today.year, today.month, today.day, 23, 59, 59).togregorian()
+        news_query = news_query.filter(News.published_at >= start_gregorian, News.published_at <= end_gregorian)
+        news_list = news_query.all()
+        
+        # فیلتر بر اساس کلیدواژه‌های ذخیره شده
+        filter_keywords = load_filters()
+        highlights = []
+        
+        if filter_keywords:
+            for news in news_list:
+                for kw in filter_keywords:
+                    if (kw in (news.title or '')) or (kw in (news.summary or '')):
+                        highlights.append(news)
+                        break
+        
+        # تکرار در چند خبرگزاری
+        title_map = {}
+        for news in news_list:
+            norm = normalize_title(news.title or '')
+            if not norm:
+                continue
+            if norm not in title_map:
+                title_map[norm] = []
+            title_map[norm].append(news)
+        
+        for group in title_map.values():
+            agencies = set(n.agency for n in group)
+            if len(agencies) >= 2:
+                highlights.extend(group)
+        
+        # حذف تکراری‌ها
+        highlights = list({n.id: n for n in highlights}.values())
+        highlights.sort(key=lambda n: n.published_at, reverse=True)
+        
+        db.close()
+        
+        return templates.TemplateResponse('view_highlights.html', {
+            "request": request,
+            "highlights": highlights,
+            "today": today
+        })
+        
+    except Exception as e:
+        return HTMLResponse(f"خطا در بارگذاری صفحه: {e}", status_code=500)
+
+@app.get('/download-highlights-pdf')
+def download_highlights_pdf():
+    """دانلود PDF اخبار مهم روز"""
+    try:
+        db = SessionLocal()
+        news_query = db.query(News)
+        today = jdatetime.date.today()
+        start_gregorian = jdatetime.datetime(today.year, today.month, today.day, 0, 0, 0).togregorian()
+        end_gregorian = jdatetime.datetime(today.year, today.month, today.day, 23, 59, 59).togregorian()
+        news_query = news_query.filter(News.published_at >= start_gregorian, News.published_at <= end_gregorian)
+        news_list = news_query.all()
+        
+        # فیلتر بر اساس کلیدواژه‌های ذخیره شده
+        filter_keywords = load_filters()
+        highlights = []
+        
+        if filter_keywords:
+            for news in news_list:
+                for kw in filter_keywords:
+                    if (kw in (news.title or '')) or (kw in (news.summary or '')):
+                        highlights.append(news)
+                        break
+        
+        # تکرار در چند خبرگزاری
+        title_map = {}
+        for news in news_list:
+            norm = normalize_title(news.title or '')
+            if not norm:
+                continue
+            if norm not in title_map:
+                title_map[norm] = []
+            title_map[norm].append(news)
+        
+        for group in title_map.values():
+            agencies = set(n.agency for n in group)
+            if len(agencies) >= 2:
+                highlights.extend(group)
+        
+        # حذف تکراری‌ها
+        highlights = list({n.id: n for n in highlights}.values())
+        highlights.sort(key=lambda n: n.published_at, reverse=True)
+        
+        db.close()
+        
+        # تولید PDF
+        buffer = io.BytesIO()
+        doc = SimpleDocTemplate(buffer, pagesize=A4)
+        styles = getSampleStyleSheet()
+        
+        # اضافه کردن عنوان
+        title_style = ParagraphStyle(
+            'CustomTitle',
+            parent=styles['Heading1'],
+            fontSize=18,
+            alignment=1,  # وسط
+            spaceAfter=20
+        )
+        title = Paragraph("اخبار مهم روز", title_style)
+        
+        # اضافه کردن تاریخ
+        date_style = ParagraphStyle(
+            'CustomDate',
+            parent=styles['Normal'],
+            fontSize=12,
+            alignment=1,
+            spaceAfter=30
+        )
+        date_text = f"تاریخ: {today.strftime('%Y/%m/%d')}"
+        date_para = Paragraph(date_text, date_style)
+        
+        story = [title, date_para]
+        
+        # اضافه کردن اخبار
+        for i, news in enumerate(highlights, 1):
+            # عنوان خبر
+            news_title_style = ParagraphStyle(
+                'NewsTitle',
+                parent=styles['Heading2'],
+                fontSize=14,
+                spaceAfter=10,
+                spaceBefore=20
+            )
+            news_title = Paragraph(f"{i}. {news.title}", news_title_style)
+            story.append(news_title)
+            
+            # خلاصه خبر
+            if news.summary:
+                summary_style = ParagraphStyle(
+                    'Summary',
+                    parent=styles['Normal'],
+                    fontSize=11,
+                    spaceAfter=10,
+                    leftIndent=20
+                )
+                summary = Paragraph(f"خلاصه: {news.summary}", summary_style)
+                story.append(summary)
+            
+            # اطلاعات خبرگزاری و زمان
+            info_style = ParagraphStyle(
+                'Info',
+                parent=styles['Normal'],
+                fontSize=10,
+                spaceAfter=15,
+                leftIndent=20,
+                textColor=colors.grey
+            )
+            info_text = f"خبرگزاری: {news.agency} | زمان: {convert_to_jalali(news.published_at)}"
+            info = Paragraph(info_text, info_style)
+            story.append(info)
+            
+            # خط جداکننده
+            story.append(Spacer(1, 10))
+        
+        if not highlights:
+            no_news_style = ParagraphStyle(
+                'NoNews',
+                parent=styles['Normal'],
+                fontSize=12,
+                alignment=1
+            )
+            no_news = Paragraph("هیچ خبر مهمی یافت نشد.", no_news_style)
+            story.append(no_news)
+        
+        doc.build(story)
+        buffer.seek(0)
+        
+        return StreamingResponse(
+            io.BytesIO(buffer.getvalue()),
+            media_type='application/pdf',
+            headers={'Content-Disposition': 'attachment; filename="highlights.pdf"'}
+        )
+        
     except Exception as e:
         return HTMLResponse(f"خطا در تولید PDF: {e}", status_code=500)
 

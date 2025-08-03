@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>اخبار مهم روز - مشاهده و چاپ</title>
+    <style>
+        @media print {
+            .no-print { display: none !important; }
+            body { margin: 0; padding: 20px; }
+            .news-item { page-break-inside: avoid; }
+        }
+        
+        body {
+            font-family: 'Tahoma', 'Arial', sans-serif;
+            line-height: 1.6;
+            margin: 0;
+            padding: 20px;
+            background-color: #f8f9fa;
+        }
+        
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 0 20px rgba(0,0,0,0.1);
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+            border-bottom: 3px solid #007bff;
+            padding-bottom: 20px;
+        }
+        
+        .title {
+            font-size: 28px;
+            font-weight: bold;
+            color: #2c3e50;
+            margin-bottom: 10px;
+        }
+        
+        .date {
+            font-size: 16px;
+            color: #7f8c8d;
+        }
+        
+        .news-item {
+            margin-bottom: 25px;
+            padding: 15px;
+            border-left: 4px solid #007bff;
+            background-color: #f8f9fa;
+            border-radius: 5px;
+        }
+        
+        .news-title {
+            font-size: 18px;
+            font-weight: bold;
+            color: #2c3e50;
+            margin-bottom: 10px;
+        }
+        
+        .news-summary {
+            font-size: 14px;
+            color: #34495e;
+            margin-bottom: 10px;
+            line-height: 1.8;
+        }
+        
+        .news-info {
+            font-size: 12px;
+            color: #7f8c8d;
+            border-top: 1px solid #ecf0f1;
+            padding-top: 10px;
+        }
+        
+        .no-news {
+            text-align: center;
+            font-size: 18px;
+            color: #7f8c8d;
+            padding: 40px;
+        }
+        
+        .actions {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        
+        .btn {
+            display: inline-block;
+            padding: 10px 20px;
+            margin: 5px;
+            border: none;
+            border-radius: 5px;
+            text-decoration: none;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        .btn-primary {
+            background-color: #007bff;
+            color: white;
+        }
+        
+        .btn-success {
+            background-color: #28a745;
+            color: white;
+        }
+        
+        .btn:hover {
+            opacity: 0.8;
+        }
+        
+        @media screen {
+            .btn { display: inline-block; }
+        }
+        
+        @media print {
+            .btn { display: none; }
+            .container { box-shadow: none; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="title">اخبار مهم روز</div>
+            <div class="date">تاریخ: {{ today.strftime('%Y/%m/%d') }}</div>
+        </div>
+        
+        <div class="actions no-print">
+            <button onclick="window.print()" class="btn btn-primary">
+                🖨️ چاپ
+            </button>
+            <!-- <a href="/download-highlights-pdf" class="btn btn-success">
+                📄 دانلود PDF
+            </a> -->
+            <button onclick="window.close()" class="btn btn-primary">
+                ❌ بستن
+            </button>
+        </div>
+        
+        {% if highlights %}
+            {% for news in highlights %}
+                <div class="news-item">
+                    <div class="news-title">{{ loop.index }}. {{ news.title }}</div>
+                    {% if news.summary %}
+                        <div class="news-summary">
+                            <strong>خلاصه:</strong> {{ news.summary }}
+                        </div>
+                    {% endif %}
+                    <div class="news-info">
+                        <strong>خبرگزاری:</strong> {{ news.agency }} | 
+                        <strong>زمان:</strong> {{ jalali_date(news.published_at) }}
+                    </div>
+                </div>
+            {% endfor %}
+        {% else %}
+            <div class="no-news">
+                هیچ خبر مهمی یافت نشد.
+            </div>
+        {% endif %}
+    </div>
+</body>
+</html> 

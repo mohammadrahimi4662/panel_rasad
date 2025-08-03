@@ -39,7 +39,7 @@ def fetch_irna_top_news():
             driver = webdriver.Chrome(service=service, options=chrome_options)
         
         try:
-            url = 'https://www.irna.ir/'
+            url = 'https://www.irna.ir/archive'
             driver.get(url)
             
             # انتظار برای لود شدن صفحه
@@ -49,7 +49,7 @@ def fetch_irna_top_news():
             
             # انتظار بیشتر برای Cloudflare
             import time
-            time.sleep(5)
+            time.sleep(8)
             
             # دریافت محتوای صفحه
             page_source = driver.page_source
@@ -58,43 +58,57 @@ def fetch_irna_top_news():
             news_list = []
             all_news_items = []
             
-            # جستجوی اخبار با selector های مختلف
-            selectors = [
-                'div.top-news a',
-                'div.news-item a',
-                'div.breaking-news a',
-                'div.latest-news a',
-                'div.news-list a',
-                'a[href*="/news/"]',
-                'a[href*="/fa/news/"]'
-            ]
+            # انتخاب اخبار از آرشیو IRNA - همه li ها
+            news_items = soup.select('ul li')
             
-            for selector in selectors:
-                items = soup.select(selector)
-                if items:
-                    print(f"Found {len(items)} items with selector: {selector}")
-                    for item in items[:10]:
-                        title = item.get_text(strip=True)
-                        link = item.get('href', '')
+            print(f"تعداد آیتم‌های یافت شده در آرشیو: {len(news_items)}")
+            
+            for item in news_items[:15]:  # حداکثر 15 خبر
+                try:
+                    # استخراج عنوان از h3 داخل div.desc
+                    title_elem = item.select_one('div.desc h3 a')
+                    if not title_elem:
+                        continue
                         
-                        if not title or not link:
-                            continue
-                            
-                        if not link.startswith('http'):
-                            link = 'https://www.irna.ir' + link
-                        
-                        # حذف تکراری
-                        is_duplicate = False
-                        for existing in all_news_items:
-                            if existing['title'] == title or existing['url'] == link:
-                                is_duplicate = True
-                                break
-                        
-                        if not is_duplicate and len(title) > 10:
-                            all_news_items.append({'title': title, 'url': link})
+                    title = title_elem.get_text(strip=True)
+                    if not title or len(title) < 10:
+                        continue
                     
-                    if all_news_items:
-                        break
+                    # استخراج لینک
+                    link = title_elem.get('href', '')
+                    if not link:
+                        continue
+                        
+                    if not link.startswith('http'):
+                        link = 'https://www.irna.ir' + link
+                    
+                    # استخراج توضیحات
+                    desc_elem = item.select_one('div.desc p')
+                    description = desc_elem.get_text(strip=True) if desc_elem else ""
+                    
+                    # استخراج تاریخ
+                    time_elem = item.select_one('div.desc time a')
+                    time_text = time_elem.get_text(strip=True) if time_elem else ""
+                    
+                    # حذف تکراری
+                    is_duplicate = False
+                    for existing in all_news_items:
+                        if existing['title'] == title or existing['url'] == link:
+                            is_duplicate = True
+                            break
+                    
+                    if not is_duplicate:
+                        all_news_items.append({
+                            'title': title, 
+                            'url': link, 
+                            'description': description,
+                            'time': time_text
+                        })
+                        print(f"خبر جدید یافت شد: {title[:50]}...")
+                        
+                except Exception as e:
+                    print(f"خطا در پردازش خبر IRNA: {e}")
+                    continue
             
             print(f"تعداد کل اخبار IRNA: {len(all_news_items)}")
             
@@ -151,18 +165,28 @@ def extract_irna_content(url):
             else:
                 title = soup.title.text.strip() if soup.title else ''
 
-        # Extract summary from <p class="summary introtext" itemprop="description">
-        summary_tag = soup.find('p', class_='summary introtext', itemprop='description')
-        if summary_tag and summary_tag.text.strip():
-            summary = summary_tag.text.strip()
+        # ابتدا تگ summary را جستجو کن
+        summary_text = ""
+        summary_tag = soup.select_one('p.summary')
+        if summary_tag:
+            summary_text = summary_tag.get_text(strip=True)
+            print(f"خلاصه IRNA یافت شد: {summary_text[:100]}...")
         else:
-            # fallback: try first <p> in article
-            article = soup.find('article')
-            if article:
-                p = article.find('p')
-                summary = p.text.strip() if p else ''
-            else:
-                summary = ''
+            # fallback: try other summary selectors
+            summary_selectors = [
+                'p.summary.introtext[itemprop="description"]',
+                'p.summary.introtext',
+                'div.summary p',
+                'div.intro p'
+            ]
+            for selector in summary_selectors:
+                summary_tag = soup.select_one(selector)
+                if summary_tag:
+                    summary_text = summary_tag.get_text(strip=True)
+                    print(f"خلاصه IRNA یافت شد: {summary_text[:100]}...")
+                    break
+        
+        summary = summary_text
 
         # Extract main content as before (for ChatGPT summarization)
         content_parts = []
@@ -188,6 +212,10 @@ def extract_irna_content(url):
                 full_content = full_content[:2000] + "..."
         else:
             full_content = ''
+        
+        # اگر summary یافت شد، آن را به ابتدای محتوا اضافه کن
+        if summary_text:
+            full_content = f"خلاصه خبر: {summary_text}\n\nمتن کامل: {full_content}"
 
         return {
             'title': title,
@@ -199,14 +227,11 @@ def extract_irna_content(url):
         return {'title': '', 'summary': '', 'content': ''}
 
 def extract_irna_content_with_summary(url, homepage_title=None):
-    """استخراج محتوای IRNA و خلاصه‌سازی با ChatGPT و بازگرداندن عنوان صحیح"""
+    """استخراج محتوای IRNA و خلاصه از سایت"""
     data = extract_irna_content(url)
     title = data['title'] if data['title'] else (homepage_title or '')
     summary = data['summary']
-    content = data['content']
-    # اگر خلاصه نبود، از ChatGPT خلاصه بساز
-    if not summary and content:
-        summary = get_chatgpt_summary(content, title)
+    # خلاصه از سایت استخراج شده، مستقیماً استفاده کن
     return {'title': title, 'summary': summary}
 
 # تابع دریافت اخبار BBC فارسی با خلاصه‌سازی هوشمند
@@ -320,11 +345,11 @@ def extract_bbc_content(url):
         return ""
 
 def extract_bbc_content_with_summary(url, title):
-    """استخراج محتوای BBC و خلاصه‌سازی با ChatGPT"""
+    """استخراج محتوای BBC و خلاصه از سایت"""
     content = extract_bbc_content(url)
     if content:
-        # BBC روتیتر ندارد، از ChatGPT استفاده کن
-        return get_chatgpt_summary(content, title)
+        # خلاصه از سایت استخراج شده، مستقیماً استفاده کن
+        return content
     return ""
 
 # تابع دریافت اخبار ایران اینترنشنال با خلاصه‌سازی هوشمند
@@ -459,18 +484,11 @@ def extract_iranintl_content(url):
         return ""
 
 def extract_iranintl_content_with_summary(url, title):
-    """استخراج محتوای IranIntl و تشخیص روتیتر"""
+    """استخراج محتوای IranIntl و خلاصه از سایت"""
     content = extract_iranintl_content(url)
     if content:
-        # بررسی اینکه آیا این روتیتر است یا نه
-        if len(content) < 300 and not content.endswith("..."):
-            # احتمالاً روتیتر است
-            print("✅ از روتیتر IranIntl استفاده می‌شود")
-            return content
-        else:
-            # از ChatGPT استفاده کن
-            print("🔄 از ChatGPT برای خلاصه‌سازی استفاده می‌شود")
-            return get_chatgpt_summary(content, title)
+        # خلاصه از سایت استخراج شده، مستقیماً استفاده کن
+        return content
     return ""
 
 # تابع دریافت اخبار ISNA
@@ -519,10 +537,12 @@ def fetch_isna_news():
             # انتخاب اخبار از آرشیو ISNA
             news_items = soup.select('div.items ul li')
             
+            print(f"تعداد آیتم‌های یافت شده در آرشیو: {len(news_items)}")
+            
             for item in news_items[:15]:  # حداکثر 15 خبر
                 try:
-                    # استخراج عنوان
-                    title_elem = item.select_one('h3 a, h4 a')
+                    # استخراج عنوان - فقط از h3 (نه h4 که روتیتر است)
+                    title_elem = item.select_one('div.desc h3 a')
                     if not title_elem:
                         continue
                         
@@ -539,11 +559,11 @@ def fetch_isna_news():
                         link = 'https://www.isna.ir' + link
                     
                     # استخراج توضیحات
-                    desc_elem = item.select_one('p')
+                    desc_elem = item.select_one('div.desc p')
                     description = desc_elem.get_text(strip=True) if desc_elem else ""
                     
                     # استخراج تاریخ
-                    time_elem = item.select_one('time a')
+                    time_elem = item.select_one('div.desc time a')
                     time_text = time_elem.get('title', '') if time_elem else ""
                     
                     # حذف تکراری
@@ -560,6 +580,7 @@ def fetch_isna_news():
                             'description': description,
                             'time': time_text
                         })
+                        print(f"خبر جدید یافت شد: {title[:50]}...")
                         
                 except Exception as e:
                     print(f"خطا در پردازش خبر ISNA: {e}")
@@ -681,6 +702,13 @@ def extract_isna_content(url):
         response.encoding = 'utf-8'
         soup = BeautifulSoup(response.text, 'html.parser')
         
+        # ابتدا تگ summary را جستجو کن
+        summary_elem = soup.select_one('p.summary')
+        summary_text = ""
+        if summary_elem:
+            summary_text = summary_elem.get_text(strip=True)
+            print(f"خلاصه ISNA یافت شد: {summary_text[:100]}...")
+        
         content_parts = []
         
         # جستجو در محتوای اصلی ISNA
@@ -708,20 +736,25 @@ def extract_isna_content(url):
             full_content = ' '.join(content_parts)
             if len(full_content) > 2000:
                 full_content = full_content[:2000] + "..."
+            
+            # اگر summary یافت شد، آن را به ابتدای محتوا اضافه کن
+            if summary_text:
+                full_content = f"خلاصه خبر: {summary_text}\n\nمتن کامل: {full_content}"
+            
             return full_content
         else:
-            return ""
+            return summary_text if summary_text else ""
             
     except Exception as e:
         print(f"خطا در استخراج محتوای ISNA: {e}")
         return ""
 
 def extract_isna_content_with_summary(url, title):
-    """استخراج محتوای ISNA و خلاصه‌سازی با ChatGPT"""
+    """استخراج محتوای ISNA و خلاصه از سایت"""
     content = extract_isna_content(url)
     if content:
-        # ISNA روتیتر ندارد، از ChatGPT استفاده کن
-        return get_chatgpt_summary(content, title)
+        # خلاصه از سایت استخراج شده، مستقیماً استفاده کن
+        return content
     return ""
 
 def extract_tasnim_content(url):
